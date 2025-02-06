@@ -13,3 +13,7 @@ ansible*
 **.env.**
 
 # secret
+
+# checks 
+**foo**
+**bar**
