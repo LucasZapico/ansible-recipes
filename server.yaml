@@ -1,0 +1,69 @@
+---
+- name: "setup ubuntu server"
+  hosts: servers
+  become: yes
+  become_user: root
+
+
+ 
+  tasks:
+    # apt packages and apps
+    - name: "apt update"
+      apt: 
+        update_cache: yes
+        state: present
+    - name: "apt upgrade"
+      apt:
+        upgrade: dist
+        state: present
+    - name: "install vim"
+      apt: 
+        name: vim
+        state: present
+    - name: "install git"
+      apt: 
+        name: git
+        state: present
+   
+    - name: "install zsh"
+      apt:
+        name: zsh
+        state: present
+    - name: "update etc/shells shell"
+      lineinfile:
+        path: /etc/shells
+        line: /usr/bin/zsh
+        insertafter: /bin/sh
+        state: present
+    - name: "set default shell"
+      command: chsh -s /usr/bin/zsh za
+    - name: "check oh my zsh"
+      stat:
+        path: "/home/za/.oh-my-zsh"
+      register: oh_my_zsh_installed
+    - name: "add ohmyzsh"
+      expect:
+        command: sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+        responses:
+          "Do you want to change your default shell to zsh? [Y/n]":
+            - Y
+        
+      when: not oh_my_zsh_installed.stat.exists
+      # check zshrc 
+    - name: "check .zshrc exists"
+      stat: 
+        path: "/home/za/.zshrc"
+      register: "zshrc_exits"
+      # set custom prompt
+    - name: "set prompt"
+      lineinfile:
+        path:  "/home/za/.zshrc"
+        line: "PROMPT='%(?.%F{green}->.%F{red}->)%f %B%F{yellow}%n@%m::%F{red}%2~%f%b '"
+        state: present
+      when: zshrc_exits.stat.exists
+      # check homebrew installed
+        
+        
+
+    
+
