@@ -1,0 +1,6 @@
+machines:
+  hosts:
+    111.222.1.333
+servers:
+  hosts:
+    111.222.1.333
