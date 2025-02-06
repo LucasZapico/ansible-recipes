@@ -1,0 +1,158 @@
+---
+- name: "init machines"
+  hosts: "machines"
+  become: yes
+  become_user: root
+
+ 
+  tasks:
+    # apt packages and apps
+    - name: "apt update"
+      apt: 
+        update_cache: yes
+        state: present
+    - name: "apt upgrade"
+      apt:
+        upgrade: dist
+        state: present
+    - name: "install curl"
+      apt: 
+        name: curl
+        state: present
+    - name: "install gnome-shell-extensions"
+      apt:
+        name: "gnome-shell-extension-manager"
+        state: present
+    - name: "install gnome-tweaks"
+      apt:
+        name: "gnome-tweaks"
+        state: present 
+    - name: "install gdb"
+      apt: 
+        name: "gdb"
+        state: present
+    - name: "install vim"
+      apt: 
+        name: vim
+        state: present
+    - name: "install git"
+      apt: 
+        name: git
+        state: present
+    - name: "flatpak"
+      apt: 
+        name: flatpak
+        state: present
+    # - name: Add Flatpak PPA repository
+    #   become: yes
+    #   apt_repository:
+    #     repo: ppa:flatpak/stable
+    #     state: present
+        # update apt after flathub
+    - name: "apt upgrade"
+      apt:
+        upgrade: dist
+        state: present
+    - name: "install zsh"
+      apt:
+        name: zsh
+        state: present
+    - name: "update etc/shells shell"
+      lineinfile:
+        path: /etc/shells
+        line: /usr/bin/zsh
+        insertafter: /bin/sh
+        state: present
+    - name: "set default shell"
+      command: chsh -s /usr/bin/zsh za
+    - name: "check oh my zsh"
+      stat:
+        path: "/home/za/.oh-my-zsh"
+      register: oh_my_zsh_installed
+    - name: "add ohmyzsh"
+      expect:
+        command: sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+        responses:
+          "Do you want to change your default shell to zsh? [Y/n]":
+            - Y
+      when: not oh_my_zsh_installed.stat.exists
+      # check zshrc 
+    - name: "check .zshrc exists"
+      stat: 
+        path: "/home/za/.zshrc"
+      register: "zshrc_exits"
+      # set custom prompt
+    - name: "set prompt"
+      lineinfile:
+        path:  "/home/za/.zshrc"
+        line: "PROMPT='%(?.%F{green}->.%F{red}->)%f %B%F{yellow}%n@%m::%F{red}%2~%f%b '"
+        state: present
+      when: zshrc_exits.stat.exists
+      # check homebrew installed
+    - name: "check brew installed"
+      command: "brew --version"
+      register: brew_installed
+      ignore_errors: yes
+
+
+      # install gnome extensions
+    # - name: "install rectangle window maanger"
+    
+
+    ####
+    ## flatpak apps
+    ####
+    - name: "flatpak"
+      become: true
+      become_method: sudo
+      expect: 
+        commmd: add-apt-repository ppa:flatpak/stable
+        responses: 
+          "":""
+    # - name: "setup flatpak"
+    #   become: true
+    #   shell: flatpak remote-add --if-not-exists flathub 
+    # - name: "localsend"
+    #   become: yes
+    #   shell: flatpak install flathub org.localsend.localsend_app
+    # - name: "pikabackup"
+    #   become: yes 
+    #   shell: flatpak install flathub org.gnome.World.PikaBackup
+    ####
+    ## snap 
+    ####
+    - name: "installl chromium"
+      become: yes 
+      snap:
+        name: chromium
+        # classic: true
+
+        
+    - name: "install codium"
+      become: yes 
+      snap: 
+        name: codium
+        classic: true
+    - name: "install vscode"
+      become: yes 
+      snap: 
+        name: code
+        classic: true
+        state: present
+    - name: "install bruno"
+      become: yes 
+      snap: 
+        name: bruno
+        state: present 
+
+    - name: "install clipboard manager"
+      become: yes 
+      snap: 
+        name: clipboard
+        state: present 
+         
+        
+        
+
+    
+
