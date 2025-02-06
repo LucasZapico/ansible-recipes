@@ -1,0 +1,11 @@
+# ansible inventoryies 
+**hosts.yaml
+**hosts*
+value.yaml
+
+# env vars 
+.env
+.env.*
+**.env.**
+
+# secret
