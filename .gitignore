@@ -1,7 +1,11 @@
-# ansible inventoryies 
+
+
+# ansible 
 **hosts.yaml
 **hosts*
 value.yaml
+
+ansible*
 
 # env vars 
 .env
