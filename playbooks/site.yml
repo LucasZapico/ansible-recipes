@@ -1,0 +1,12 @@
+---
+- name: Base setup on all servers
+  hosts: servers
+  become: true
+  roles:
+    - base
+
+- name: Cloudflare tunnel hosts
+  hosts: cloudflared
+  become: true
+  roles:
+    - cloudflared

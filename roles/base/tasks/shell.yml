@@ -1,0 +1,39 @@
+---
+- name: Install zsh
+  ansible.builtin.apt:
+    name: zsh
+    state: present
+
+- name: Ensure zsh is a registered shell
+  ansible.builtin.lineinfile:
+    path: /etc/shells
+    line: /usr/bin/zsh
+    state: present
+
+- name: Set zsh as default shell for {{ base_shell_user }}
+  ansible.builtin.user:
+    name: "{{ base_shell_user }}"
+    shell: /usr/bin/zsh
+
+- name: Install oh-my-zsh
+  ansible.builtin.git:
+    repo: https://github.com/ohmyzsh/ohmyzsh.git
+    dest: "~{{ base_shell_user }}/.oh-my-zsh"
+    depth: 1
+    update: false
+  become: true
+  become_user: "{{ base_shell_user }}"
+
+- name: Check for .zshrc
+  ansible.builtin.stat:
+    path: "~{{ base_shell_user }}/.zshrc"
+  register: base_zshrc
+
+- name: Set custom prompt
+  ansible.builtin.lineinfile:
+    path: "~{{ base_shell_user }}/.zshrc"
+    line: "{{ base_zsh_prompt }}"
+    state: present
+  when:
+    - base_zsh_prompt | length > 0
+    - base_zshrc.stat.exists

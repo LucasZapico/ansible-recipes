@@ -1,0 +1,28 @@
+---
+- name: Ensure config directory exists
+  ansible.builtin.file:
+    path: /etc/cloudflared
+    state: directory
+    mode: "0755"
+
+- name: Check tunnel credentials exist on host
+  ansible.builtin.stat:
+    path: "{{ cloudflared_credentials_file }}"
+  register: cloudflared_creds
+
+- name: Fail if credentials are missing
+  ansible.builtin.fail:
+    msg: >-
+      {{ cloudflared_credentials_file }} not found. Provision it once by hand
+      (cloudflared tunnel create, or copy the JSON from the machine that
+      created the tunnel). Credentials never live in the repo.
+  when: not cloudflared_creds.stat.exists
+
+- name: Render /etc/cloudflared/config.yml (validated before install)
+  ansible.builtin.template:
+    src: config.yml.j2
+    dest: /etc/cloudflared/config.yml
+    mode: "0644"
+    backup: true
+    validate: cloudflared tunnel --config %s ingress validate
+  notify: Restart cloudflared

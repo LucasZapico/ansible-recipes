@@ -1,0 +1,25 @@
+---
+# Example host_vars for a Cloudflare tunnel host. Real values live in the
+# private inventory repo.
+cloudflared_tunnel: 00000000-0000-0000-0000-000000000000
+cloudflared_credentials_file: /etc/cloudflared/00000000-0000-0000-0000-000000000000.json
+
+# "" lets cloudflared pick (QUIC preferred). Pin "http2" if UDP to the edge
+# is unreliable on your network.
+cloudflared_protocol: ""
+
+cloudflared_ingress:
+  # Plain HTTP origin.
+  - hostname: app.example.com
+    service: http://localhost:8000
+
+  # HTTPS origin with a self-signed or Traefik default cert.
+  - hostname: api.example.com
+    service: https://localhost:443
+    no_tls_verify: true
+
+  # Anything cloudflared supports via originRequest.
+  - hostname: slow.example.com
+    service: http://localhost:3000
+    origin_request:
+      connectTimeout: 30s

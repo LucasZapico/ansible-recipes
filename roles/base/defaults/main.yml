@@ -1,0 +1,29 @@
+---
+# Packages installed on every host.
+base_packages:
+  - vim
+  - git
+  - curl
+  - htop
+  - unzip
+
+# Extra packages a host or group can append without overriding the list above.
+base_extra_packages: []
+
+# Shell setup (zsh + oh-my-zsh) for this user. Set to "" to skip shell setup.
+base_shell_user: "{{ ansible_user | default('') }}"
+
+# Optional PROMPT line appended to the user's .zshrc. Empty string = leave alone.
+base_zsh_prompt: ""
+
+# Unattended security upgrades (no automatic reboots).
+base_unattended_upgrades: true
+base_unattended_auto_reboot: false
+
+# Timezone and NTP. Servers should stay on UTC; format/display belongs in apps.
+base_manage_time: true
+base_timezone: "Etc/UTC"
+
+# SSH hardening: key-only auth, no root password login.
+# Off by default on purpose. Flip per host AFTER confirming key access works.
+base_ssh_hardening: false

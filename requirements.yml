@@ -1,0 +1,7 @@
+---
+# Collections used by the roles. Included in the `ansible` package; needed
+# explicitly only with bare ansible-core:
+#   ansible-galaxy collection install -r requirements.yml
+collections:
+  - community.general   # timezone
+  - ansible.posix       # sysctl

@@ -1,0 +1,30 @@
+# {{ ansible_managed }}
+# Source of truth: host_vars in the inventory repo. Hand edits are overwritten.
+tunnel: {{ cloudflared_tunnel }}
+credentials-file: {{ cloudflared_credentials_file }}
+{% if cloudflared_protocol | length > 0 %}
+protocol: {{ cloudflared_protocol }}
+{% endif %}
+{% if cloudflared_metrics | length > 0 %}
+metrics: {{ cloudflared_metrics }}
+{% endif %}
+
+ingress:
+{% for rule in cloudflared_ingress %}
+  - hostname: {{ rule.hostname | to_json }}
+    service: {{ rule.service | to_json }}
+{% if rule.no_tls_verify | default(false) or rule.origin_request is defined %}
+    originRequest:
+{% if rule.no_tls_verify | default(false) %}
+      noTLSVerify: true
+{% endif %}
+{% if rule.origin_request is defined %}
+{{ rule.origin_request | to_nice_yaml(indent=2) | indent(6, true) }}
+{% endif %}
+{% endif %}
+{% endfor %}
+  - service: {{ cloudflared_catch_all_service | to_json }}
+{% if cloudflared_catch_all_no_tls_verify %}
+    originRequest:
+      noTLSVerify: true
+{% endif %}

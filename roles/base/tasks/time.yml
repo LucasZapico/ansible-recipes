@@ -1,0 +1,14 @@
+---
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ base_timezone }}"
+
+- name: Enable NTP sync (systemd-timesyncd)
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    enabled: true
+    state: started
+  register: base_timesyncd
+  failed_when:
+    - base_timesyncd is failed
+    - "'Could not find the requested service' not in (base_timesyncd.msg | default(''))"
