@@ -84,6 +84,14 @@ serves DHCP.
 [beszel](https://beszel.dev) monitoring hub as a compose stack. Hub data
 lives in `beszel_hub_dir/beszel_data`.
 
+### beszel_agent
+
+beszel agent as a host-network container with a read-only docker.sock
+mount (reports host and container stats). Requires docker to already be
+present: pair with the `docker` role on self-owned hosts, or rely on the
+platform (e.g. Coolify) elsewhere. Set `beszel_agent_hub_key` to the
+hub's public key.
+
 ## Requirements
 
 - Control node: Ansible 2.15+ (the `ansible` package includes the

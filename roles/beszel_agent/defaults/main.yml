@@ -1,0 +1,14 @@
+---
+# Directory holding the compose project.
+beszel_agent_dir: /srv/beszel-agent
+
+beszel_agent_owner: root
+
+beszel_agent_image: henrygd/beszel-agent:latest
+
+# Port the agent listens on (hub polls this).
+beszel_agent_port: 45876
+
+# The beszel HUB's public SSH key (from the hub's settings / beszel_data).
+# Public key only; the private half never leaves the hub.
+beszel_agent_hub_key: ""

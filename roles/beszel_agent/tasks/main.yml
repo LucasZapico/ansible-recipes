@@ -1,0 +1,32 @@
+---
+- name: Validate role inputs
+  ansible.builtin.assert:
+    that:
+      - beszel_agent_hub_key | length > 0
+    fail_msg: beszel_agent_hub_key must be set (the hub's PUBLIC key).
+
+# The agent runs as a container. Docker itself is only installed by the
+# `docker` role on hosts we own outright; on platform-managed hosts
+# (e.g. Coolify servers) docker must already exist, so just verify.
+- name: Verify docker is present
+  ansible.builtin.command: docker --version
+  changed_when: false
+
+- name: Ensure agent directory exists
+  ansible.builtin.file:
+    path: "{{ beszel_agent_dir }}"
+    state: directory
+    owner: "{{ beszel_agent_owner }}"
+    mode: "0755"
+
+- name: Render compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ beszel_agent_dir }}/docker-compose.yml"
+    owner: "{{ beszel_agent_owner }}"
+    mode: "0644"
+
+- name: Start beszel agent
+  community.docker.docker_compose_v2:
+    project_src: "{{ beszel_agent_dir }}"
+    state: present
