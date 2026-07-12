@@ -1,18 +1,32 @@
 ---
+- name: Ensure keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
 - name: Add Docker package signing key
   ansible.builtin.get_url:
     url: https://download.docker.com/linux/ubuntu/gpg
-    dest: /usr/share/keyrings/docker.asc
+    dest: /etc/apt/keyrings/docker.asc
     mode: "0644"
 
-- name: Add Docker apt repository
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb [arch={{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}
-      signed-by=/usr/share/keyrings/docker.asc]
-      https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
-    filename: docker
-    state: present
+# Own the whole sources file (not apt_repository line-appends): pre-existing
+# installs may already define this repo, and a second entry with a different
+# signed-by makes apt refuse ALL sources.
+- name: Write Docker apt source
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/docker.list
+    mode: "0644"
+    content: >
+      deb [arch={{ 'amd64' if ansible_facts['architecture'] == 'x86_64' else 'arm64' }}
+      signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu {{ ansible_facts['distribution_release'] }} stable
+
+- name: Remove legacy key location
+  ansible.builtin.file:
+    path: /usr/share/keyrings/docker.asc
+    state: absent
 
 - name: Install Docker engine and compose plugin
   ansible.builtin.apt:
