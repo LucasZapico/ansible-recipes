@@ -24,6 +24,17 @@
     state: present
     update_cache: true
 
+- name: Configure daemon (live-restore)
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+    content: |
+      {
+        "live-restore": true
+      }
+  when: docker_live_restore
+  notify: Reload docker
+
 - name: Enable Docker service
   ansible.builtin.systemd:
     name: docker

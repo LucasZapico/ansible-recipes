@@ -1,0 +1,7 @@
+---
+# live-restore is in dockerd's SIGHUP-reloadable set: reload applies it
+# without restarting containers. Never swap this for a restart.
+- name: Reload docker
+  ansible.builtin.systemd:
+    name: docker
+    state: reloaded
