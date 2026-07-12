@@ -1,22 +1,35 @@
 ---
+- name: Ensure keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
 - name: Add Cloudflare package signing key
   ansible.builtin.get_url:
     url: https://pkg.cloudflare.com/cloudflare-main.gpg
-    dest: /usr/share/keyrings/cloudflare-main.gpg
+    dest: /etc/apt/keyrings/cloudflare-main.gpg
     mode: "0644"
 
-- name: Add cloudflared apt repository
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg]
-      https://pkg.cloudflare.com/cloudflared {{ ansible_distribution_release }} main
-    filename: cloudflared
-    state: present
+# Own the whole sources file; see docker role for why line-appends conflict
+# with pre-existing repo definitions.
+- name: Write cloudflared apt source
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/cloudflared.list
+    mode: "0644"
+    content: >
+      deb [signed-by=/etc/apt/keyrings/cloudflare-main.gpg]
+      https://pkg.cloudflare.com/cloudflared
+      {{ ansible_facts['distribution_release'] }} main
+
+- name: Remove legacy key location
+  ansible.builtin.file:
+    path: /usr/share/keyrings/cloudflare-main.gpg
+    state: absent
 
 - name: Install cloudflared
   ansible.builtin.apt:
     name: cloudflared
     state: latest
     update_cache: true
-    cache_valid_time: 3600
   notify: Restart cloudflared

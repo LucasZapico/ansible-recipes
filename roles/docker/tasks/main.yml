@@ -7,21 +7,23 @@
 
 - name: Add Docker package signing key
   ansible.builtin.get_url:
-    url: https://download.docker.com/linux/ubuntu/gpg
+    url: "https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}/gpg"
     dest: /etc/apt/keyrings/docker.asc
     mode: "0644"
 
 # Own the whole sources file (not apt_repository line-appends): pre-existing
 # installs may already define this repo, and a second entry with a different
-# signed-by makes apt refuse ALL sources.
+# signed-by makes apt refuse ALL sources. Distro- and arch-aware so the same
+# role serves Ubuntu and Debian/RaspiOS machines on amd64/arm64/armhf.
 - name: Write Docker apt source
   ansible.builtin.copy:
     dest: /etc/apt/sources.list.d/docker.list
     mode: "0644"
     content: >
-      deb [arch={{ 'amd64' if ansible_facts['architecture'] == 'x86_64' else 'arm64' }}
+      deb [arch={{ {'x86_64': 'amd64', 'aarch64': 'arm64', 'armv7l': 'armhf'}[ansible_facts['architecture']] }}
       signed-by=/etc/apt/keyrings/docker.asc]
-      https://download.docker.com/linux/ubuntu {{ ansible_facts['distribution_release'] }} stable
+      https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}
+      {{ ansible_facts['distribution_release'] }} stable
 
 - name: Remove legacy key location
   ansible.builtin.file:
