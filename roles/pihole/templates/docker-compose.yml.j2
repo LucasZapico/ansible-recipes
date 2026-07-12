@@ -1,0 +1,24 @@
+# {{ ansible_managed }}
+services:
+  pihole:
+    container_name: pihole
+    image: {{ pihole_image }}
+    env_file: ".env"
+    environment:
+      - WEBPASSWORD=${PIHOLE_PASSWORD}
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+{% if pihole_dhcp %}
+      - "67:67/udp"
+{% endif %}
+      - "{{ pihole_web_port }}:80/tcp"
+    volumes:
+      - '/etc/localtime:/etc/localtime:ro'
+      - './etc-pihole:/etc/pihole'
+      - './etc-dnsmasq.d:/etc/dnsmasq.d'
+{% if pihole_dhcp %}
+    cap_add:
+      - NET_ADMIN
+{% endif %}
+    restart: unless-stopped

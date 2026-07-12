@@ -1,0 +1,19 @@
+---
+- name: Ensure beszel directory exists
+  ansible.builtin.file:
+    path: "{{ beszel_hub_dir }}"
+    state: directory
+    owner: "{{ beszel_hub_owner }}"
+    mode: "0755"
+
+- name: Render compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ beszel_hub_dir }}/docker-compose.yml"
+    owner: "{{ beszel_hub_owner }}"
+    mode: "0644"
+
+- name: Start beszel hub
+  community.docker.docker_compose_v2:
+    project_src: "{{ beszel_hub_dir }}"
+    state: present

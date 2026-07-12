@@ -1,0 +1,19 @@
+---
+# Directory holding the compose project and pihole data volumes
+# (etc-pihole/ and etc-dnsmasq.d/ subdirs, plus a .env with PIHOLE_PASSWORD).
+pihole_dir: /srv/pihole
+
+# Owner of the compose project directory.
+pihole_owner: root
+
+pihole_image: pihole/pihole:latest
+
+# Host port for the admin web UI.
+pihole_web_port: 82
+
+# Expose DHCP port 67 and NET_ADMIN only when pihole serves DHCP.
+pihole_dhcp: false
+
+# Ubuntu's systemd-resolved stub listener occupies :53 and must be disabled
+# for pihole to bind DNS. Set false only if the host handles this itself.
+pihole_disable_resolved_stub: true

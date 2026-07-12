@@ -64,6 +64,26 @@ Installs and manages a Cloudflare Tunnel connector the supported way:
 See `examples/host_vars/server-one.yml` for the ingress rule shape and
 `roles/cloudflared/defaults/main.yml` for all variables.
 
+### docker
+
+Docker engine + compose plugin from Docker's official apt repository.
+`docker_users` lists accounts added to the docker group.
+
+### pihole
+
+Pi-hole as a compose stack. Disables the systemd-resolved stub listener
+(which otherwise occupies port 53 on Ubuntu) and repoints
+`/etc/resolv.conf` before starting the container. Expects the data
+volumes (`etc-pihole/`, `etc-dnsmasq.d/`) and a `.env` with
+`PIHOLE_PASSWORD` to exist in `pihole_dir`; restore them from a backup or
+let a fresh install create them. Set `pihole_dhcp: true` only if Pi-hole
+serves DHCP.
+
+### beszel_hub
+
+[beszel](https://beszel.dev) monitoring hub as a compose stack. Hub data
+lives in `beszel_hub_dir/beszel_data`.
+
 ## Requirements
 
 - Control node: Ansible 2.15+ (the `ansible` package includes the

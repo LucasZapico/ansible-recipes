@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+services:
+  beszel:
+    container_name: beszel
+    image: {{ beszel_hub_image }}
+    ports:
+      - "{{ beszel_hub_port }}:8090"
+    volumes:
+      - './beszel_data:/beszel_data'
+    restart: unless-stopped
