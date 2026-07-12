@@ -13,7 +13,7 @@
         dest: /etc/systemd/resolved.conf.d/10-pihole.conf
         mode: "0644"
         content: |
-          # {{ ansible_managed }}
+          # Managed by Ansible (pihole role). Hand edits are overwritten.
           [Resolve]
           DNSStubListener=no
       register: pihole_resolved_conf
