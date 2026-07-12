@@ -48,7 +48,7 @@
     msg: >-
       {{ pihole_dir }}/.env not found. Create it on the host with
       PIHOLE_PASSWORD=... (restore from backup or set fresh).
-  when: not pihole_env.stat.exists
+  when: not pihole_env.stat.exists and not ansible_check_mode
 
 - name: Render compose file
   ansible.builtin.template:
@@ -56,8 +56,12 @@
     dest: "{{ pihole_dir }}/docker-compose.yml"
     owner: "{{ pihole_owner }}"
     mode: "0644"
+  register: pihole_compose
 
 - name: Start pihole
   community.docker.docker_compose_v2:
     project_src: "{{ pihole_dir }}"
     state: present
+  # In check mode on a fresh host the project dir was never really created;
+  # skip instead of false-failing.
+  when: not (ansible_check_mode and pihole_compose is changed)
