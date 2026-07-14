@@ -92,6 +92,31 @@ present: pair with the `docker` role on self-owned hosts, or rely on the
 platform (e.g. Coolify) elsewhere. Set `beszel_agent_hub_key` to the
 hub's public key.
 
+### ntfy
+
+[ntfy](https://ntfy.sh) push notification server as a compose stack, for
+hosts and scripts that need to reach a phone. `ntfy_base_url` is required
+(ntfy builds subscription links from it, and push does not work without
+it), so the role asserts it rather than starting a broken server.
+
+Defaults to `auth-default-access: deny-all`, which means a topic name is
+not a password: publishing and subscribing both need an account or token.
+Create those once, by hand, after the first converge:
+
+```sh
+docker exec -it ntfy ntfy user add --role=admin <name>
+docker exec -it ntfy ntfy token add <name>
+```
+
+They are deliberately not provisioned from Ansible, since that would put
+credentials in the play output and in the repo.
+
+A self-hosted server cannot wake an iOS device on its own, because only
+the official app carries Apple's push certificate. Set
+`ntfy_upstream_base_url: https://ntfy.sh` to forward a *hash* of the topic
+(never message content) so the phone wakes and then fetches the real
+message from your server. Android and the web UI need nothing extra.
+
 ## Requirements
 
 - Control node: Ansible 2.15+ (the `ansible` package includes the

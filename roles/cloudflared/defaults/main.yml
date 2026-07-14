@@ -32,3 +32,10 @@ cloudflared_udp_buffer_bytes: 8388608
 
 # Manage the systemd unit (set false if something else owns the service).
 cloudflared_manage_service: true
+
+# Apt suite to pull cloudflared from. Cloudflare publishes per distro codename
+# and lags new releases: Ubuntu 26.04 ("resolute") has no repo as of 2026-07,
+# so the host's own codename 404s. Override with the newest codename Cloudflare
+# does publish (e.g. "noble") on those hosts. The binary is static and runs
+# fine across releases.
+cloudflared_apt_suite: "{{ ansible_facts['distribution_release'] }}"

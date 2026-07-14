@@ -1,0 +1,34 @@
+---
+# Directory holding the compose project, the server config, and ntfy's own
+# state (cache/ and lib/ subdirs).
+ntfy_dir: /srv/ntfy
+
+ntfy_owner: root
+
+ntfy_image: binwiederhier/ntfy:v2.11.0
+
+# Host port. ntfy listens on :80 inside the container.
+ntfy_port: 8085
+
+# Public URL clients and phones use, e.g. https://ntfy.example.com. Required:
+# ntfy builds subscription links from it, and push does not work without it.
+ntfy_base_url: ""
+
+# True when something else terminates TLS in front of ntfy (a tunnel, Traefik,
+# nginx). Makes ntfy trust X-Forwarded-For for rate limiting.
+ntfy_behind_proxy: true
+
+# deny-all means a topic name is not a password: publishing and subscribing
+# both require an account or token. Users and tokens are created once, by hand
+# (see README) — provisioning them from here would put credentials in the play.
+ntfy_auth_default_access: deny-all
+
+# Optional. Self-hosted ntfy cannot wake an iOS device on its own, because only
+# the official app holds the Apple push certificate. Setting this to
+# https://ntfy.sh forwards a *hash* of the topic (no message content) so the
+# phone gets woken and then fetches the real message from this server. Leave
+# empty if you only use Android or the web UI.
+ntfy_upstream_base_url: ""
+
+# How long messages stay retrievable for clients that were offline.
+ntfy_cache_duration: 12h
