@@ -1,0 +1,67 @@
+---
+- name: Disable systemd-resolved stub listener (frees :53)
+  when: pihole_disable_resolved_stub
+  block:
+    - name: Ensure resolved drop-in directory exists
+      ansible.builtin.file:
+        path: /etc/systemd/resolved.conf.d
+        state: directory
+        mode: "0755"
+
+    - name: Turn off the stub listener
+      ansible.builtin.copy:
+        dest: /etc/systemd/resolved.conf.d/10-pihole.conf
+        mode: "0644"
+        content: |
+          # Managed by Ansible (pihole role). Hand edits are overwritten.
+          [Resolve]
+          DNSStubListener=no
+      register: pihole_resolved_conf
+
+    - name: Point /etc/resolv.conf at the real resolver list
+      ansible.builtin.file:
+        src: /run/systemd/resolve/resolv.conf
+        dest: /etc/resolv.conf
+        state: link
+        force: true
+
+    - name: Restart systemd-resolved
+      ansible.builtin.systemd:
+        name: systemd-resolved
+        state: restarted
+      when: pihole_resolved_conf is changed
+
+- name: Ensure pihole directory exists
+  ansible.builtin.file:
+    path: "{{ pihole_dir }}"
+    state: directory
+    owner: "{{ pihole_owner }}"
+    mode: "0755"
+
+- name: Check pihole .env exists (holds PIHOLE_PASSWORD, never in repo)
+  ansible.builtin.stat:
+    path: "{{ pihole_dir }}/.env"
+  register: pihole_env
+
+- name: Fail if .env is missing
+  ansible.builtin.fail:
+    msg: >-
+      {{ pihole_dir }}/.env not found. Create it on the host with
+      PIHOLE_PASSWORD=... (restore from backup or set fresh).
+  when: not pihole_env.stat.exists and not ansible_check_mode
+
+- name: Render compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ pihole_dir }}/docker-compose.yml"
+    owner: "{{ pihole_owner }}"
+    mode: "0644"
+  register: pihole_compose
+
+- name: Start pihole
+  community.docker.docker_compose_v2:
+    project_src: "{{ pihole_dir }}"
+    state: present
+  # In check mode on a fresh host the project dir was never really created;
+  # skip instead of false-failing.
+  when: not (ansible_check_mode and pihole_compose is changed)

@@ -1,0 +1,34 @@
+---
+# Tunnel identity. Set per host in your (private) inventory repo.
+# cloudflared_tunnel: UUID or tunnel name.
+cloudflared_tunnel: ""
+
+# Path to the tunnel credentials JSON on the HOST. Never store its contents
+# in a repo. Created once with `cloudflared tunnel create` (or copied from
+# the machine that did).
+cloudflared_credentials_file: "/etc/cloudflared/{{ cloudflared_tunnel }}.json"
+
+# Transport to the Cloudflare edge: "" (auto/quic), "quic", or "http2".
+# QUIC needs the UDP buffer sysctls below; http2 rides plain TCP.
+cloudflared_protocol: ""
+
+# Optional Prometheus metrics listener, e.g. "127.0.0.1:20241". "" = disabled.
+cloudflared_metrics: ""
+
+# Ingress rules, first match wins. Each item:
+#   hostname: public hostname
+#   service:  origin URL (http://..., https://..., tcp://...)
+#   no_tls_verify: true   -> originRequest.noTLSVerify (self-signed origins)
+#   origin_request: {}    -> raw originRequest map for anything else
+cloudflared_ingress: []
+
+# Where unmatched requests go. Traefik-behind-tunnel setups often use the
+# local proxy; the safe default is a 404.
+cloudflared_catch_all_service: "http_status:404"
+cloudflared_catch_all_no_tls_verify: false
+
+# QUIC UDP buffer sizing (see quic-go/quic-go wiki "UDP Buffer Sizes").
+cloudflared_udp_buffer_bytes: 8388608
+
+# Manage the systemd unit (set false if something else owns the service).
+cloudflared_manage_service: true

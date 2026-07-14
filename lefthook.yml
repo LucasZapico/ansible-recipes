@@ -1,0 +1,19 @@
+pre-commit:
+  commands:
+    gitleaks:
+      run: gitleaks protect --staged --redact --no-banner
+    ansible-lint:
+      glob: "*.{yml,yaml,j2}"
+      # --with ansible: the full ansible package bundles the community
+      # collections the roles use (docker_compose_v2, timezone, sysctl).
+      run: uvx --with ansible ansible-lint roles/
+
+commit-msg:
+  commands:
+    conventional:
+      run: |
+        header=$(head -1 {1})
+        echo "$header" | grep -qE '^(feat|fix|chore|docs|refactor|test|perf|ci|build|style|revert)(\(.+\))?!?: .+' \
+          || { echo "commit-msg: not Conventional Commits format" >&2; exit 1; }
+        [ ${#header} -le 72 ] \
+          || { echo "commit-msg: subject ${#header} chars (max 72)" >&2; exit 1; }

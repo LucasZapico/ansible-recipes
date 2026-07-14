@@ -1,0 +1,16 @@
+---
+# Example inventory. Your real inventory belongs in a separate PRIVATE repo,
+# not here. See README "Layout: public recipes, private inventory".
+all:
+  vars:
+    ansible_user: admin
+  children:
+    servers:
+      hosts:
+        server-one:
+          ansible_host: 203.0.113.10
+        server-two:
+          ansible_host: 203.0.113.11
+    cloudflared:
+      hosts:
+        server-one:

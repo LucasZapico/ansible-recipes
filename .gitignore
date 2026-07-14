@@ -1,19 +1,20 @@
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
 
+# python / ansible runtime
+.venv/
+*.retry
+collections/
 
-# ansible 
-**hosts.yaml
-**hosts*
-value.yaml
-
-ansible*
-
-# env vars 
+# env & secrets (none should exist here, belt and suspenders)
 .env
 .env.*
-**.env.**
+**/env/.env.*
+*.pem
+*credentials*.json
 
-# secret
-
-# checks 
-**foo**
-**bar**
+# claude local
+.claude/settings.local.json
+CLAUDE.local.md

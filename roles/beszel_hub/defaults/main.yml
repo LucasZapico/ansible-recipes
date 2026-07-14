@@ -1,0 +1,11 @@
+---
+# Directory holding the compose project and the hub data
+# (beszel_data/ subdir with data.db etc.).
+beszel_hub_dir: /srv/beszel
+
+beszel_hub_owner: root
+
+beszel_hub_image: henrygd/beszel:latest
+
+# Host port for the hub web UI.
+beszel_hub_port: 8090

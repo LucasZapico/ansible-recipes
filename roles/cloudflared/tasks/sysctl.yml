@@ -1,0 +1,17 @@
+---
+# cloudflared's QUIC transport asks the kernel for ~7 MiB socket buffers.
+# Stock Linux caps them at 208 KiB, which drops packets under load and shows
+# up as "failed to dial to edge with quic: timeout" flakiness.
+- name: Raise UDP receive buffer ceiling
+  ansible.posix.sysctl:
+    name: net.core.rmem_max
+    value: "{{ cloudflared_udp_buffer_bytes }}"
+    sysctl_file: /etc/sysctl.d/98-cloudflared-quic.conf
+    reload: true
+
+- name: Raise UDP send buffer ceiling
+  ansible.posix.sysctl:
+    name: net.core.wmem_max
+    value: "{{ cloudflared_udp_buffer_bytes }}"
+    sysctl_file: /etc/sysctl.d/98-cloudflared-quic.conf
+    reload: true

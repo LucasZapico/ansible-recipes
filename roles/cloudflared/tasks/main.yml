@@ -1,0 +1,22 @@
+---
+- name: Validate role inputs
+  ansible.builtin.assert:
+    that:
+      - cloudflared_tunnel | length > 0
+      - cloudflared_ingress | length > 0
+    fail_msg: >-
+      cloudflared_tunnel and cloudflared_ingress must be set
+      (normally in host_vars of your inventory repo).
+
+- name: Install cloudflared
+  ansible.builtin.import_tasks: install.yml
+
+- name: Tune UDP buffers for QUIC
+  ansible.builtin.import_tasks: sysctl.yml
+
+- name: Render tunnel config
+  ansible.builtin.import_tasks: config.yml
+
+- name: Manage service
+  ansible.builtin.import_tasks: service.yml
+  when: cloudflared_manage_service

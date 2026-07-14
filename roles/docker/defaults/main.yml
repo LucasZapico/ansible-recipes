@@ -1,0 +1,9 @@
+---
+# Users added to the docker group (can run docker without sudo).
+docker_users: []
+
+# Keep containers running while the daemon restarts (upgrades, crashes).
+# Docker docs: only pertains to STANDALONE containers, not swarm services —
+# do not rely on it on swarm nodes. Only set true on hosts where this role
+# owns /etc/docker/daemon.json outright (it writes the whole file).
+docker_live_restore: false

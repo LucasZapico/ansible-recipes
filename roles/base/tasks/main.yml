@@ -1,0 +1,19 @@
+---
+- name: Install packages
+  ansible.builtin.import_tasks: packages.yml
+
+- name: Configure shell
+  ansible.builtin.import_tasks: shell.yml
+  when: base_shell_user | length > 0
+
+- name: Configure unattended upgrades
+  ansible.builtin.import_tasks: updates.yml
+  when: base_unattended_upgrades
+
+- name: Configure time
+  ansible.builtin.import_tasks: time.yml
+  when: base_manage_time
+
+- name: Harden SSH
+  ansible.builtin.import_tasks: ssh.yml
+  when: base_ssh_hardening

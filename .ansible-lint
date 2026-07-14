@@ -1,0 +1,8 @@
+---
+profile: safety
+
+skip_list:
+  # cloudflared tracking latest from the vendor apt repo is intentional:
+  # apt owns the upgrade cadence; pinning would recreate the stale-binary
+  # problem this role exists to fix.
+  - package-latest

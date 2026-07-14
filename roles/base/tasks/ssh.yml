@@ -1,0 +1,12 @@
+---
+- name: Harden sshd (key-only auth)
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/60-hardening.conf
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+    content: |
+      # Managed by Ansible (base role). Hand edits are overwritten.
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin prohibit-password
+  notify: Restart sshd
