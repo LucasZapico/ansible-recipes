@@ -20,7 +20,7 @@
     content: >
       deb [signed-by=/etc/apt/keyrings/cloudflare-main.gpg]
       https://pkg.cloudflare.com/cloudflared
-      {{ ansible_facts['distribution_release'] }} main
+      {{ cloudflared_apt_suite }} main
 
 - name: Remove legacy key location
   ansible.builtin.file:
