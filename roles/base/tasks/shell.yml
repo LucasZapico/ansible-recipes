@@ -38,3 +38,13 @@
   when:
     - base_zsh_prompt | length > 0
     - base_zshrc.stat.exists
+
+- name: Put per-user tool directories on PATH
+  ansible.builtin.lineinfile:
+    path: "~{{ base_shell_user }}/.zshrc"
+    line: 'export PATH="{{ item }}:$PATH"'
+    state: present
+  loop: "{{ base_zsh_path_entries }}"
+  when:
+    - base_zsh_path_entries | length > 0
+    - base_zshrc.stat.exists

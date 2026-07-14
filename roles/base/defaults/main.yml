@@ -16,6 +16,11 @@ base_shell_user: "{{ ansible_user | default('') }}"
 # Optional PROMPT line appended to the user's .zshrc. Empty string = leave alone.
 base_zsh_prompt: ""
 
+# Directories prepended to PATH in the user's .zshrc, e.g. ["$HOME/.local/bin"].
+# Tools installed per-user (uv, task) land there and are otherwise invisible to
+# a login shell. Empty list = leave PATH alone.
+base_zsh_path_entries: []
+
 # Unattended security upgrades (no automatic reboots).
 base_unattended_upgrades: true
 base_unattended_auto_reboot: false
