@@ -1,0 +1,41 @@
+---
+# Cloudflare API token. Needs Zone:Read always (to resolve a hostname to its
+# zone), plus DNS:Read to audit or DNS:Edit to converge. Scope it to all zones,
+# not a hand-picked list: an orphan hiding in a zone the token cannot see is
+# invisible, which is the exact failure this role exists to catch.
+#
+# Worth pairing a read-only token with cloudflare_dns_audit_only, so a scheduled
+# reconcile cannot write even if this role has a bug. Cloudflare has no
+# per-record-type permission, so an edit token can technically rewrite MX and
+# SPF; the only thing that stops it is cf_diff, which never looks at a record
+# that is not a .cfargotunnel.com target.
+#
+# Declared here, never defined: the value comes from the private inventory's
+# vault. See README.md.
+cloudflare_dns_api_token: ""
+
+# Inventory group whose hosts run a tunnel. Every `hostname:` in their
+# cloudflared_ingress becomes one proxied CNAME to that host's tunnel.
+# This is the whole point: the ingress rule IS the DNS declaration.
+cloudflare_dns_source_group: cloudflared
+
+# Records that legitimately point at a tunnel but have no ingress rule of their
+# own - wildcards, mostly. Without these they read as orphans forever.
+# Each item: {name, content, type (CNAME), proxied (true), origin (a note)}
+cloudflare_dns_extra_records: []
+
+# Never write, only compare. Used by the verify playbook.
+cloudflare_dns_audit_only: false
+
+# Orphans (a record aimed at a tunnel that nothing serves) are ALWAYS reported.
+# Whether that is fatal is the caller's call: converge warns, audit fails.
+cloudflare_dns_fail_on_orphans: false
+
+# Delete orphans. Off by default and deliberately awkward to turn on: this is
+# the only destructive thing the role can do, and DNS deletions are not
+# something to discover after the fact.
+cloudflare_dns_prune: false
+
+# Hostnames that resolve only through a wildcard are reported as shadowed.
+# Converging creates real records for them, which is the fix.
+cloudflare_dns_fail_on_shadowed: false
