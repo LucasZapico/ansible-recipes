@@ -1,0 +1,44 @@
+---
+- name: Require a public base URL
+  ansible.builtin.assert:
+    that:
+      - ntfy_base_url | length > 0
+      - ntfy_base_url is match('^https?://')
+    fail_msg: >-
+      ntfy_base_url must be set to the public URL (e.g. https://ntfy.example.com).
+      ntfy builds subscription links from it and push does not work without it.
+
+- name: Ensure ntfy directories exist
+  ansible.builtin.file:
+    path: "{{ ntfy_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ ntfy_owner }}"
+    mode: "0755"
+  loop:
+    - ""
+    - cache
+    - lib
+
+- name: Render server config
+  ansible.builtin.template:
+    src: server.yml.j2
+    dest: "{{ ntfy_dir }}/server.yml"
+    owner: "{{ ntfy_owner }}"
+    mode: "0644"
+  notify: Restart ntfy
+
+- name: Render compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ ntfy_dir }}/docker-compose.yml"
+    owner: "{{ ntfy_owner }}"
+    mode: "0644"
+  register: ntfy_compose
+
+- name: Start ntfy
+  community.docker.docker_compose_v2:
+    project_src: "{{ ntfy_dir }}"
+    state: present
+  # In check mode on a fresh host the project dir was never really created;
+  # skip instead of false-failing.
+  when: not (ansible_check_mode and ntfy_compose is changed)

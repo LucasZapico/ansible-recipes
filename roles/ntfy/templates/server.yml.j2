@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+base-url: "{{ ntfy_base_url }}"
+listen-http: ":80"
+behind-proxy: {{ ntfy_behind_proxy | bool | lower }}
+
+auth-file: /var/lib/ntfy/user.db
+auth-default-access: "{{ ntfy_auth_default_access }}"
+
+cache-file: /var/cache/ntfy/cache.db
+cache-duration: "{{ ntfy_cache_duration }}"
+{% if ntfy_upstream_base_url %}
+
+# Wakes iOS devices via the official ntfy.sh push service. Only a topic hash
+# leaves this host, never message content.
+upstream-base-url: "{{ ntfy_upstream_base_url }}"
+{% endif %}
