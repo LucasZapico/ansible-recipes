@@ -1,0 +1,134 @@
+---
+# Runs once, on localhost: DNS is account state, not host state. No become.
+
+- name: Validate role inputs
+  ansible.builtin.assert:
+    that:
+      - cloudflare_dns_api_token | length > 0
+    fail_msg: >-
+      cloudflare_dns_api_token is not set. It belongs in your private inventory's
+      vault, never in a role. Pair a read-only token with audit_only and an
+      edit-scoped one with converge, so a scheduled reconcile cannot write.
+
+- name: Require a tunnel UUID on every source host
+  ansible.builtin.assert:
+    that:
+      - hostvars[item].cloudflared_tunnel | default('') is match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+    fail_msg: >-
+      {{ item }}: cloudflared_tunnel must be the tunnel UUID, not its name.
+      DNS CNAMEs target <uuid>.cfargotunnel.com, so the name form gives us
+      nothing to point at.
+  loop: "{{ groups[cloudflare_dns_source_group] | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Fetch zones visible to the token
+  ansible.builtin.uri:
+    url: "https://api.cloudflare.com/client/v4/zones?per_page=50&page={{ item }}"
+    headers:
+      Authorization: "Bearer {{ cloudflare_dns_api_token }}"
+    return_content: true
+  register: cloudflare_dns_zone_pages
+  no_log: true # the Authorization header would otherwise land in the log
+  loop: "{{ range(1, 6) | list }}"
+  when: item == 1 or (cloudflare_dns_zone_pages.results[item - 2].json.result_info.total_pages | default(1)) >= item
+
+- name: Collect zone name -> id
+  ansible.builtin.set_fact:
+    cloudflare_dns_zones: >-
+      {{ cloudflare_dns_zone_pages.results | selectattr('json', 'defined')
+         | map(attribute='json.result') | flatten
+         | items2dict(key_name='name', value_name='id') }}
+
+- name: Fetch every DNS record, in every zone the token can see
+  ansible.builtin.uri:
+    # Deliberately all zones, not just the ones we have ingress for: a record
+    # aimed at a dead tunnel in an unused zone is precisely the drift we want.
+    url: "https://api.cloudflare.com/client/v4/zones/{{ item.value }}/dns_records?per_page=100"
+    headers:
+      Authorization: "Bearer {{ cloudflare_dns_api_token }}"
+    return_content: true
+  register: cloudflare_dns_record_pages
+  no_log: true
+  loop: "{{ cloudflare_dns_zones | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Find zones whose record list came back truncated
+  ansible.builtin.set_fact:
+    cloudflare_dns_truncated: >-
+      {{ cloudflare_dns_record_pages.results
+         | selectattr('json.result_info.total_pages', 'defined')
+         | selectattr('json.result_info.total_pages', '>', 1)
+         | map(attribute='item.key') | list }}
+
+- name: Refuse to audit a zone we only partially read
+  ansible.builtin.assert:
+    that:
+      - cloudflare_dns_truncated | length == 0
+    fail_msg: >-
+      More than 100 DNS records in {{ cloudflare_dns_truncated | join(', ') }},
+      so that read was truncated and any orphan report built on it would be a
+      lie. Paginate this task before trusting the result.
+
+- name: Flatten live records
+  ansible.builtin.set_fact:
+    cloudflare_dns_live: >-
+      {{ cloudflare_dns_record_pages.results | map(attribute='json.result') | flatten }}
+
+- name: Derive desired records from cloudflared ingress rules
+  ansible.builtin.set_fact:
+    cloudflare_dns_desired: >-
+      {{ hostvars | cf_desired_records(groups[cloudflare_dns_source_group] | default([]),
+                                       cloudflare_dns_extra_records) }}
+
+- name: Map tunnel UUID -> host, so an orphan can name the tunnel it aims at
+  ansible.builtin.set_fact:
+    cloudflare_dns_tunnel_owners: >-
+      {{ dict(groups[cloudflare_dns_source_group] | default([])
+              | map('extract', hostvars, 'cloudflared_tunnel')
+              | zip(groups[cloudflare_dns_source_group] | default([]))) }}
+
+- name: Compare desired against live
+  ansible.builtin.set_fact:
+    cloudflare_dns_plan: >-
+      {{ cloudflare_dns_desired | cf_diff(cloudflare_dns_live, cloudflare_dns_zones.keys() | list) }}
+    cloudflare_dns_shadowed: >-
+      {{ cloudflare_dns_desired | cf_shadowed(cloudflare_dns_live, cloudflare_dns_zones.keys() | list) }}
+
+- name: Reconcile report
+  ansible.builtin.debug:
+    msg: "{{ lookup('template', 'report.txt.j2').split('\n') }}"
+
+- name: Fail when a desired hostname belongs to no zone on this account
+  ansible.builtin.assert:
+    that:
+      - cloudflare_dns_plan.unroutable | length == 0
+    fail_msg: >-
+      No zone on this Cloudflare account covers:
+      {{ cloudflare_dns_plan.unroutable | map(attribute='name') | join(', ') }}.
+      Either the zone is on another account or the hostname is a typo.
+
+# `| bool` throughout: these flags arrive as -e extra-vars, which makes them the
+# STRING "true"/"false", and a non-empty string is truthy in Jinja. Without the
+# cast, `-e cloudflare_dns_audit_only=false` would SKIP the converge it was
+# asking for, silently and successfully.
+- name: Converge records
+  ansible.builtin.import_tasks: converge.yml
+  when: not (cloudflare_dns_audit_only | bool)
+
+- name: Delete orphaned records
+  ansible.builtin.import_tasks: prune.yml
+  when:
+    - cloudflare_dns_prune | bool
+    - not (cloudflare_dns_audit_only | bool)
+
+- name: Fail on unresolved drift
+  ansible.builtin.assert:
+    that:
+      - not (cloudflare_dns_fail_on_orphans | bool and cloudflare_dns_plan.orphans | length > 0)
+      - not (cloudflare_dns_fail_on_shadowed | bool and cloudflare_dns_shadowed | length > 0)
+    fail_msg: >-
+      DNS has drifted from the inventory. See the reconcile report above.
+      Orphans: {{ cloudflare_dns_plan.orphans | map(attribute='name') | join(', ') | default('none', true) }}.
+      Shadowed: {{ cloudflare_dns_shadowed | map(attribute='name') | join(', ') | default('none', true) }}.

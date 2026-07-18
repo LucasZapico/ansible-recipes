@@ -1,0 +1,34 @@
+{{ ansible_managed }}
+================================ DNS RECONCILE ================================
+source     {{ cloudflare_dns_desired | length }} desired records
+           ({{ groups[cloudflare_dns_source_group] | default([]) | length }} tunnel hosts' ingress rules
+           + {{ cloudflare_dns_extra_records | length }} declared exceptions)
+live       {{ cloudflare_dns_live | length }} records across {{ cloudflare_dns_zones | length }} zones
+-------------------------------------------------------------------------------
+IN SYNC     {{ '%3d' | format(cloudflare_dns_plan.insync | length) }}
+CREATE      {{ '%3d' | format(cloudflare_dns_plan.create | length) }}   ingress rule with no record of its own
+DRIFTED     {{ '%3d' | format(cloudflare_dns_plan.drifted | length) }}   record exists but aims somewhere else
+ORPHAN      {{ '%3d' | format(cloudflare_dns_plan.orphans | length) }}   tunnel record no ingress rule claims
+SHADOWED    {{ '%3d' | format(cloudflare_dns_shadowed | length) }}   resolves only via a wildcard
+UNROUTABLE  {{ '%3d' | format(cloudflare_dns_plan.unroutable | length) }}   hostname in no zone on this account
+-------------------------------------------------------------------------------
+{% for r in cloudflare_dns_plan.create %}
+CREATE      {{ r.name }} -> {{ r.origin }}
+{% endfor %}
+{% for r in cloudflare_dns_plan.drifted %}
+DRIFTED     {{ r.name }}: {{ r.was }} => {{ r.content }} ({{ r.origin }})
+{% endfor %}
+{% for r in cloudflare_dns_shadowed %}
+SHADOWED    {{ r.name }} (covered by {{ r.wildcard }}, ingress on {{ r.origin }})
+{% endfor %}
+{% for r in cloudflare_dns_plan.orphans %}
+ORPHAN      {{ r.name }} -> {{ cloudflare_dns_tunnel_owners.get(r.tunnel, 'DEAD TUNNEL') }} ({{ r.tunnel[:8] }})
+{% endfor %}
+{% for r in cloudflare_dns_plan.unroutable %}
+UNROUTABLE  {{ r.name }} ({{ r.origin }})
+{% endfor %}
+{% if cloudflare_dns_audit_only %}
+-------------------------------------------------------------------------------
+audit only - nothing was written.
+{% endif %}
+===============================================================================

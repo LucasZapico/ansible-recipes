@@ -18,3 +18,7 @@ collections/
 # claude local
 .claude/settings.local.json
 CLAUDE.local.md
+
+# Python bytecode from Ansible filter_plugins
+__pycache__/
+*.pyc

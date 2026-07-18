@@ -1,0 +1,46 @@
+---
+# The only destructive path in this role. Reached only with
+# cloudflare_dns_prune=true, which the Taskfile makes you type out.
+#
+# Scope is narrow on purpose: an orphan is a record whose content ends in
+# .cfargotunnel.com and which no ingress rule and no declared exception claims.
+# A record that is not a tunnel record can never be pruned here, no matter how
+# stale it looks - MX, SPF, verification TXT and the Tailscale/gitea records are
+# all structurally out of reach.
+
+- name: Show exactly what will be deleted
+  ansible.builtin.debug:
+    msg: >-
+      DELETE {{ item.name }} ({{ item.type }} -> {{ item.content }})
+  loop: "{{ cloudflare_dns_plan.orphans }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Confirm
+  ansible.builtin.pause:
+    prompt: >-
+      About to DELETE the {{ cloudflare_dns_plan.orphans | length }} record(s)
+      above from Cloudflare. This is not reversible from here.
+      Type 'yes' to proceed
+  register: cloudflare_dns_confirm
+  when:
+    - cloudflare_dns_plan.orphans | length > 0
+    # `| bool` is not cosmetic here. From -e, this arrives as the string
+    # "false", which is truthy in Jinja - so without the cast, explicitly
+    # passing assume_yes=false would SKIP this prompt and delete silently.
+    - not (cloudflare_dns_prune_assume_yes | default(false) | bool)
+
+- name: Delete orphaned records
+  community.general.cloudflare_dns:
+    api_token: "{{ cloudflare_dns_api_token }}"
+    zone: "{{ item.zone }}"
+    record: "{{ item.record }}"
+    type: "{{ item.type }}"
+    value: "{{ item.content }}"
+    state: absent
+  loop: "{{ cloudflare_dns_plan.orphans }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: >-
+    cloudflare_dns_prune_assume_yes | default(false) | bool
+    or (cloudflare_dns_confirm.user_input | default('')) == 'yes'

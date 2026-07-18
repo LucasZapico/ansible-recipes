@@ -1,0 +1,31 @@
+---
+# Create what is missing, correct what has drifted. Never deletes: removal is
+# prune.yml, behind its own flag.
+
+- name: Create missing records
+  community.general.cloudflare_dns:
+    api_token: "{{ cloudflare_dns_api_token }}"
+    zone: "{{ item.zone }}"
+    record: "{{ item.record }}"
+    type: "{{ item.type }}"
+    value: "{{ item.content }}"
+    proxied: "{{ item.proxied }}"
+    solo: true # a hostname resolves to one place; replace any conflicting record
+    state: present
+  loop: "{{ cloudflare_dns_plan.create }}"
+  loop_control:
+    label: "{{ item.name }} -> {{ item.origin }}"
+
+- name: Correct drifted records
+  community.general.cloudflare_dns:
+    api_token: "{{ cloudflare_dns_api_token }}"
+    zone: "{{ item.zone }}"
+    record: "{{ item.record }}"
+    type: "{{ item.type }}"
+    value: "{{ item.content }}"
+    proxied: "{{ item.proxied }}"
+    solo: true
+    state: present
+  loop: "{{ cloudflare_dns_plan.drifted }}"
+  loop_control:
+    label: "{{ item.name }}: {{ item.was }} -> {{ item.content }}"
