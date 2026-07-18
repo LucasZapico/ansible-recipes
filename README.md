@@ -79,6 +79,28 @@ volumes (`etc-pihole/`, `etc-dnsmasq.d/`) and a `.env` with
 let a fresh install create them. Set `pihole_dhcp: true` only if Pi-hole
 serves DHCP.
 
+Local DNS records go in `pihole_local_records` (list of `{name, ip}`, plus
+`wildcard: true` for a domain and all its subdomains). They render to a
+dnsmasq config and Pi-hole v6 is told to load `/etc/dnsmasq.d` via an
+`FTLCONF` flag the compose sets automatically when the list is non-empty.
+
+### caddy
+
+Reverse proxy (Caddy) for internal services, routing each `caddy_routes` entry
+(`{name, host, upstream}`) by hostname to its backend. Pair with a Pi-hole
+wildcard record pointing `*.<tld>` at the proxy host. Two TLS modes via
+`caddy_tls`:
+
+- `internal` (default) — Caddy's own CA, so it works for a bare TLD like
+  `.lab`. Trust Caddy's root on a device for a green padlock; get it with
+  `docker exec caddy cat /data/caddy/pki/authorities/local/root.crt`.
+- `cloudflare` — Let's Encrypt over **DNS-01** for a real domain: one wildcard
+  cert for `caddy_site`, needs a `.env` with `CF_API_TOKEN` (Cloudflare token,
+  Zone:DNS:Edit) in `caddy_dir`, never in the repo.
+
+The image is built locally from a templated Dockerfile (official Caddy + the
+`caddy-dns/cloudflare` module, which the stock image lacks).
+
 ### beszel_hub
 
 [beszel](https://beszel.dev) monitoring hub as a compose stack. Hub data

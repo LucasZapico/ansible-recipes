@@ -1,0 +1,6 @@
+---
+- name: Reload caddy
+  community.docker.docker_container_exec:
+    container: caddy
+    command: caddy reload --config /etc/caddy/Caddyfile
+  when: not ansible_check_mode

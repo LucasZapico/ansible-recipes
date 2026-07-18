@@ -1,0 +1,6 @@
+---
+- name: Reload pihole dns
+  community.docker.docker_container_exec:
+    container: pihole
+    command: pihole reloaddns
+  when: not ansible_check_mode

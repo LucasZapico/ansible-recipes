@@ -50,6 +50,29 @@
       PIHOLE_PASSWORD=... (restore from backup or set fresh).
   when: not pihole_env.stat.exists and not ansible_check_mode
 
+- name: Ensure etc-dnsmasq.d directory exists
+  ansible.builtin.file:
+    path: "{{ pihole_dir }}/etc-dnsmasq.d"
+    state: directory
+    owner: "{{ pihole_owner }}"
+    mode: "0755"
+
+- name: Render local DNS records
+  ansible.builtin.template:
+    src: local-dns.conf.j2
+    dest: "{{ pihole_dir }}/etc-dnsmasq.d/02-local-dns.conf"
+    owner: "{{ pihole_owner }}"
+    mode: "0644"
+  when: pihole_local_records | length > 0
+  notify: Reload pihole dns
+
+- name: Remove local DNS records file when none are defined
+  ansible.builtin.file:
+    path: "{{ pihole_dir }}/etc-dnsmasq.d/02-local-dns.conf"
+    state: absent
+  when: pihole_local_records | length == 0
+  notify: Reload pihole dns
+
 - name: Render compose file
   ansible.builtin.template:
     src: docker-compose.yml.j2
