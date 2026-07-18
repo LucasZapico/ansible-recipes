@@ -1,0 +1,31 @@
+---
+# Reverse proxy (Caddy) with automatic HTTPS via Let's Encrypt DNS-01.
+# Fronts internal *.lab.<domain> services: routes a hostname to its backend
+# and terminates TLS. Pairs with the pihole wildcard record that points every
+# *.lab.<domain> name at this host.
+
+# Compose project + persistent data dir on the host.
+caddy_dir: /srv/caddy
+caddy_owner: root
+
+# Locally-built image: official Caddy + the caddy-dns/cloudflare module (needed
+# for DNS-01; the stock image ships no DNS providers). Built from the templated
+# Dockerfile.
+caddy_image: caddy-cloudflare:local
+
+# TLS mode:
+#   internal   - Caddy's own CA (works for any name incl. bare .lab; devices
+#                must trust Caddy's root for a green padlock). No secret needed.
+#   cloudflare - Let's Encrypt over DNS-01 (needs a real domain + a .env with
+#                CF_API_TOKEN). Publicly-trusted, one wildcard cert.
+caddy_tls: internal
+
+# Let's Encrypt account email — only used when caddy_tls is "cloudflare".
+caddy_acme_email: ""
+
+# cloudflare mode only: the wildcard site to serve one cert for,
+# e.g. "*.lab.bluemonkeymakes.app".
+caddy_site: ""
+
+# Reverse-proxy routes. Each: { name: <label>, host: <name>, upstream: <ip:port> }.
+caddy_routes: []

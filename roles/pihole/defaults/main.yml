@@ -17,3 +17,10 @@ pihole_dhcp: false
 # Ubuntu's systemd-resolved stub listener occupies :53 and must be disabled
 # for pihole to bind DNS. Set false only if the host handles this itself.
 pihole_disable_resolved_stub: true
+
+# Local DNS records served to the LAN. Each entry:
+#   { name: <fqdn>, ip: <ip> }                    - exact host A record
+#   { name: <domain>, ip: <ip>, wildcard: true }  - domain + every subdomain
+# Rendered to a dnsmasq config; v6 only loads /etc/dnsmasq.d when the
+# FTLCONF flag below is set, which the compose template does when this is set.
+pihole_local_records: []

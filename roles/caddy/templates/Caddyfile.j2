@@ -1,0 +1,37 @@
+# {{ ansible_managed }}
+{% if caddy_tls == 'cloudflare' %}
+{
+{% if caddy_acme_email %}
+	email {{ caddy_acme_email }}
+{% endif %}
+}
+
+{{ caddy_site }} {
+	# One wildcard cert for the whole site over DNS-01 (CF_API_TOKEN from the
+	# host .env, never the repo).
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+
+{% for r in caddy_routes %}
+	@{{ r.name }} host {{ r.host }}
+	handle @{{ r.name }} {
+		reverse_proxy {{ r.upstream }}
+	}
+
+{% endfor %}
+	handle {
+		respond "no route for this host" 404
+	}
+}
+{% else %}
+# Internal CA: each site gets a Caddy-signed cert. Trust Caddy's root on a device
+# for a green padlock (see README); otherwise HTTPS still works, just warns.
+{% for r in caddy_routes %}
+{{ r.host }} {
+	tls internal
+	reverse_proxy {{ r.upstream }}
+}
+
+{% endfor %}
+{% endif %}

@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+# Local DNS records. `address=` matches a domain and all its subdomains
+# (wildcard); `host-record=` is an exact name. Served only to LAN clients.
+{% for r in pihole_local_records %}
+{% if r.wildcard | default(false) %}
+address=/{{ r.name }}/{{ r.ip }}
+{% else %}
+host-record={{ r.name }},{{ r.ip }}
+{% endif %}
+{% endfor %}

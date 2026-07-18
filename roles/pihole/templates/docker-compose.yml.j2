@@ -6,6 +6,10 @@ services:
     env_file: ".env"
     environment:
       - WEBPASSWORD=${PIHOLE_PASSWORD}
+{% if pihole_local_records %}
+      # v6 ignores /etc/dnsmasq.d unless this is set; needed for local-dns.conf.
+      - FTLCONF_misc_etc_dnsmasq_d=true
+{% endif %}
     ports:
       - "53:53/tcp"
       - "53:53/udp"
