@@ -3,3 +3,13 @@
   ansible.builtin.systemd:
     name: ssh
     state: restarted
+
+# Tolerates hosts without timesyncd, matching the enable task in tasks/time.yml.
+- name: Restart timesyncd
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    state: restarted
+  register: base_timesyncd_restart
+  failed_when:
+    - base_timesyncd_restart is failed
+    - "'Could not find the requested service' not in (base_timesyncd_restart.msg | default(''))"

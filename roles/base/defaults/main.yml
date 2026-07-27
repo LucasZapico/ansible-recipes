@@ -24,6 +24,24 @@ base_unattended_auto_reboot: false
 base_manage_time: true
 base_timezone: "Etc/UTC"
 
+# NTP servers pinned explicitly rather than taken from DHCP.
+#
+# This is not belt-and-braces, it is the fix for a real outage. A server should
+# not accept time from whatever the network happens to advertise: ritron was
+# handed a dead NTP server (139.78.100.163) by its router's DHCP, and because
+# systemd only falls back to FallbackNTP when it knows of NO servers at all, it
+# retried that dead address every 30s for days instead. The clock free-ran
+# +11 minutes, which broke GitHub App token signing and silently failed six
+# Coolify deploys in a row while the apps still reported healthy.
+#
+# Servers listed here take precedence over DHCP-supplied ones, so a bad DHCP
+# advertisement costs one timed-out attempt instead of stalling sync forever.
+base_ntp_servers:
+  - time.cloudflare.com
+  - pool.ntp.org
+base_ntp_fallback_servers:
+  - ntp.ubuntu.com
+
 # SSH hardening: key-only auth, no root password login.
 # Off by default on purpose. Flip per host AFTER confirming key access works.
 base_ssh_hardening: false
