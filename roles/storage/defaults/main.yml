@@ -37,3 +37,16 @@ storage_links: []
 #   allow_other          containers running as other uids can read the union
 storage_merged_default_opts: >-
   defaults,allow_other,use_ino,cache.files=partial,dropcacheonclose=true,category.create=mfs,minfreespace=50G
+
+# Logical volumes to create, format and mount. Each item:
+#   vg:    volume group (must already exist)
+#   name:  LV name
+#   size:  passed to lvcreate (e.g. 600G, or 50%FREE)
+#   fs:    filesystem to create (default ext4)
+#   path:  mountpoint
+#   opts:  mount options
+#
+# Only ever creates and grows - never shrinks, never reformats an LV that
+# already has a filesystem. Resizing down loses data and is not something a
+# converge should do on its own.
+storage_lvs: []

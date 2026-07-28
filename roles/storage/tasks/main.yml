@@ -37,6 +37,46 @@
   loop_control:
     label: "{{ item.path }}"
 
+# --- logical volumes --------------------------------------------------------
+# Created before the plain mounts below, so an LV-backed mountpoint exists
+# before anything tries to use it.
+- name: Create logical volumes
+  community.general.lvol:
+    vg: "{{ item.vg }}"
+    lv: "{{ item.name }}"
+    size: "{{ item.size }}"
+    state: present
+    resizefs: true
+    # shrink: false is the important half. A converge must never shrink a
+    # filesystem to match a smaller declared size - that destroys data.
+    shrink: false
+  loop: "{{ storage_lvs }}"
+  loop_control:
+    label: "{{ item.vg }}/{{ item.name }}"
+
+- name: Create filesystems on new logical volumes
+  community.general.filesystem:
+    fstype: "{{ item.fs | default('ext4') }}"
+    dev: "/dev/{{ item.vg }}/{{ item.name }}"
+    # never reformat something that already holds a filesystem
+    force: false
+  loop: "{{ storage_lvs }}"
+  loop_control:
+    label: "{{ item.vg }}/{{ item.name }}"
+  when: not ansible_check_mode
+
+- name: Mount logical volumes
+  ansible.posix.mount:
+    src: "/dev/{{ item.vg }}/{{ item.name }}"
+    path: "{{ item.path }}"
+    fstype: "{{ item.fs | default('ext4') }}"
+    opts: "{{ item.opts | default('defaults') }}{{ '' if not storage_force_nofail else ',nofail' }}"
+    state: mounted
+  loop: "{{ storage_lvs }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when: not ansible_check_mode
+
 # --- union mount ------------------------------------------------------------
 - name: Install mergerfs
   ansible.builtin.apt:
