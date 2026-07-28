@@ -18,26 +18,28 @@
       installing a driver that cannot bind to anything.
 
 # --- driver -----------------------------------------------------------------
-- name: Install the recommended driver via ubuntu-drivers
-  when: nvidia_driver_package | length == 0
-  block:
-    - name: Install ubuntu-drivers-common
-      ansible.builtin.apt:
-        name: ubuntu-drivers-common
-        state: present
-        update_cache: true
+# The role will not choose a driver for you. It used to fall back to
+# `ubuntu-drivers install --gpgpu`, which selects the SERVER/datacenter variant
+# - on a consumer RTX 4090 that is not what ubuntu-drivers itself recommends
+# (nvidia-driver-595-open), and the host it was run on did not survive its next
+# reboot. The cause was never proven, but a role that silently picks a different
+# package than the tool's own recommendation is not something to keep.
+#
+# Run `ubuntu-drivers devices` on the host and pin what it marks recommended.
+- name: Require an explicit driver package
+  ansible.builtin.assert:
+    that: nvidia_driver_package | length > 0
+    fail_msg: >-
+      nvidia_driver_package is not set. Run `ubuntu-drivers devices` on this
+      host and pin the package it marks "recommended" (for example
+      nvidia-driver-595-open). This role deliberately does not guess.
 
-    - name: Autoinstall the recommended NVIDIA driver
-      ansible.builtin.command: ubuntu-drivers install --gpgpu
-      register: nvidia_autoinstall
-      changed_when: "'already installed' not in nvidia_autoinstall.stdout"
-
-- name: Install a pinned driver package
+- name: Install the pinned driver package
   ansible.builtin.apt:
     name: "{{ nvidia_driver_package }}"
     state: present
     update_cache: true
-  when: nvidia_driver_package | length > 0
+  register: nvidia_driver_install
 
 # --- container toolkit ------------------------------------------------------
 - name: Container toolkit
@@ -77,6 +79,45 @@
         state: present
         update_cache: true
       when: not (ansible_check_mode and nvidia_toolkit_source is changed)
+
+# --- initramfs, checked BEFORE any reboot -----------------------------------
+# Installing a driver triggers a dkms build and an initramfs rebuild. If that
+# image loses the hooks needed to assemble the root device, the host boots to
+# "No working init found" and there is no way back in over ssh. This is the
+# check that turns that into a failed play while the machine is still up.
+- name: Find the root device type
+  ansible.builtin.shell: |
+    set -o pipefail
+    lsblk -no TYPE "$(findmnt -no SOURCE /)" | head -1
+  args:
+    executable: /bin/bash
+  register: nvidia_root_type
+  changed_when: false
+  check_mode: false
+
+- name: Check the initramfs can still assemble an LVM root
+  ansible.builtin.shell: |
+    set -o pipefail
+    lsinitramfs /boot/initrd.img-{{ ansible_kernel }} | grep -c lvm
+  args:
+    executable: /bin/bash
+  register: nvidia_initramfs_lvm
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: nvidia_root_type.stdout | trim == 'lvm'
+
+- name: Refuse to leave the host unbootable
+  ansible.builtin.assert:
+    that: nvidia_initramfs_lvm.stdout | default('0') | int > 0
+    fail_msg: >-
+      The initramfs for {{ ansible_kernel }} no longer contains the LVM hooks,
+      and root is on LVM. Rebooting now would panic with "No working init
+      found". Rebuild it with
+      `update-initramfs -c -k {{ ansible_kernel }}` and re-run BEFORE rebooting.
+  when:
+    - nvidia_root_type.stdout | trim == 'lvm'
+    - not ansible_check_mode
 
 # --- verification -----------------------------------------------------------
 # No docker restart handler here on purpose. This role runs BEFORE the docker
