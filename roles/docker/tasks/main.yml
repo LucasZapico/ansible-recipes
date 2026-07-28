@@ -40,15 +40,23 @@
     state: present
     update_cache: true
 
-- name: Configure daemon (live-restore)
+# This role owns /etc/docker/daemon.json outright, so whatever another tool
+# writes there is erased on the next converge - silently, with the symptom
+# surfacing somewhere else entirely. `nvidia-ctk runtime configure
+# --runtime=docker` does exactly that: it registers the nvidia runtime in this
+# file, and a later converge would drop it, taking GPU access away from every
+# container with no error to point at. Declare those settings in
+# docker_daemon_options instead, so the file still has exactly one owner.
+- name: Configure the docker daemon
   ansible.builtin.copy:
     dest: /etc/docker/daemon.json
     mode: "0644"
-    content: |
-      {
-        "live-restore": true
-      }
-  when: docker_live_restore
+    content: "{{ docker_daemon_config | to_nice_json }}\n"
+  vars:
+    docker_daemon_config: >-
+      {{ ({'live-restore': true} if docker_live_restore else {})
+         | combine(docker_daemon_options, recursive=true) }}
+  when: docker_live_restore or docker_daemon_options | length > 0
   notify: Reload docker
 
 - name: Enable Docker service

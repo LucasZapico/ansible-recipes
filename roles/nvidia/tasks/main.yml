@@ -1,0 +1,112 @@
+---
+- name: Detect an NVIDIA GPU
+  ansible.builtin.shell: |
+    set -o pipefail
+    lspci | grep -ci 'nvidia' || true
+  args:
+    executable: /bin/bash
+  register: nvidia_present
+  changed_when: false
+  check_mode: false   # read-only probe; must run under --check or the assert below fires on nothing
+
+- name: Require a GPU before touching drivers
+  ansible.builtin.assert:
+    that: nvidia_present.stdout | int > 0
+    fail_msg: >-
+      No NVIDIA device found by lspci. This role is in the host's play list but
+      the hardware is not here - check the inventory group rather than
+      installing a driver that cannot bind to anything.
+
+# --- driver -----------------------------------------------------------------
+- name: Install the recommended driver via ubuntu-drivers
+  when: nvidia_driver_package | length == 0
+  block:
+    - name: Install ubuntu-drivers-common
+      ansible.builtin.apt:
+        name: ubuntu-drivers-common
+        state: present
+        update_cache: true
+
+    - name: Autoinstall the recommended NVIDIA driver
+      ansible.builtin.command: ubuntu-drivers install --gpgpu
+      register: nvidia_autoinstall
+      changed_when: "'already installed' not in nvidia_autoinstall.stdout"
+
+- name: Install a pinned driver package
+  ansible.builtin.apt:
+    name: "{{ nvidia_driver_package }}"
+    state: present
+    update_cache: true
+  when: nvidia_driver_package | length > 0
+
+# --- container toolkit ------------------------------------------------------
+- name: Container toolkit
+  when: nvidia_container_toolkit
+  block:
+    - name: Ensure keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Add the NVIDIA container toolkit signing key
+      ansible.builtin.get_url:
+        url: https://nvidia.github.io/libnvidia-container/gpgkey
+        dest: /etc/apt/keyrings/nvidia-container-toolkit.asc
+        mode: "0644"
+
+    # Own the whole sources file rather than appending, for the same reason the
+    # docker and cloudflared roles do: a second entry for the same repo with a
+    # different signed-by makes apt refuse every source on the host.
+    - name: Write the toolkit apt source
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/nvidia-container-toolkit.list
+        mode: "0644"
+        content: >
+          deb [signed-by=/etc/apt/keyrings/nvidia-container-toolkit.asc]
+          https://nvidia.github.io/libnvidia-container/stable/deb/$(ARCH) /
+      register: nvidia_toolkit_source
+
+    # In check mode the source file above was not really written, so the package
+    # cannot be in apt's cache and the install reports "no package matching
+    # nvidia-container-toolkit" - a failure describing check mode, not the host.
+    # Same guard the beszel_agent role uses for the same reason.
+    - name: Install nvidia-container-toolkit
+      ansible.builtin.apt:
+        name: nvidia-container-toolkit
+        state: present
+        update_cache: true
+      when: not (ansible_check_mode and nvidia_toolkit_source is changed)
+
+# --- verification -----------------------------------------------------------
+# No docker restart handler here on purpose. This role runs BEFORE the docker
+# role, because declaring the nvidia runtime in daemon.json while
+# /usr/bin/nvidia-container-runtime is absent stops the daemon from starting at
+# all. The docker role restarts on its own when daemon.json changes.
+# Package presence is not proof. A driver that has not bound to the card, or a
+# runtime docker does not know about, both install cleanly and then fail at the
+# only moment that matters.
+- name: Does the driver actually see the card?
+  ansible.builtin.command: nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
+  register: nvidia_smi
+  changed_when: false
+  failed_when: false
+  check_mode: false   # ditto: without this, --check always reports the driver broken
+
+# Guarded for check mode: nothing was installed there, so a missing nvidia-smi
+# describes --check rather than the host. The probe above still runs and
+# reports, which is the useful part of a dry run.
+- name: Report when a reboot is required
+  ansible.builtin.assert:
+    that: nvidia_smi.rc == 0
+    fail_msg: >-
+      nvidia-smi failed ({{ nvidia_smi.stderr | default('') | trim }}). The
+      driver is installed but not bound to the card, which normally means the
+      host needs a reboot to load the kernel module. Reboot the host and
+      re-converge; this role will not reboot a server on its own.
+  when: not ansible_check_mode
+
+- name: Show the GPU
+  ansible.builtin.debug:
+    msg: "GPU: {{ nvidia_smi.stdout | trim }}"
+  when: nvidia_smi.rc == 0

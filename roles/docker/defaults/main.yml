@@ -7,3 +7,15 @@ docker_users: []
 # do not rely on it on swarm nodes. Only set true on hosts where this role
 # owns /etc/docker/daemon.json outright (it writes the whole file).
 docker_live_restore: false
+
+# Extra keys merged into /etc/docker/daemon.json. This role writes that file
+# whole, so any setting another tool adds there is lost on the next converge.
+# Anything the daemon needs permanently belongs here.
+#
+# Example, registering the NVIDIA container runtime:
+#   docker_daemon_options:
+#     runtimes:
+#       nvidia:
+#         path: /usr/bin/nvidia-container-runtime
+#         runtimeArgs: []
+docker_daemon_options: {}
