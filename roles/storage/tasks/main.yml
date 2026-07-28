@@ -66,12 +66,18 @@
     state: mounted
   when: storage_merged | length > 0
 
+# Skipped under --check: the mount above did not really happen there, so the
+# probe would always report the union empty and fail a run that changes nothing.
+# The same trap the docker and cloudflare_dns roles hit - a check-mode false
+# failure teaches you to ignore check output, which is worse than no check.
 - name: Verify every branch actually shows up in the union
   ansible.builtin.stat:
     path: "{{ storage_merged.path }}/{{ item }}"
   register: storage_union_check
   loop: "{{ storage_merged.probe_paths | default([]) }}"
-  when: storage_merged | length > 0
+  when:
+    - storage_merged | length > 0
+    - not ansible_check_mode
   changed_when: false
 
 - name: Fail if a declared union path is missing
@@ -83,7 +89,9 @@
   loop: "{{ storage_union_check.results | default([]) }}"
   loop_control:
     label: "{{ item.item | default('') }}"
-  when: storage_merged | length > 0
+  when:
+    - storage_merged | length > 0
+    - not ansible_check_mode
 
 # --- directories and links --------------------------------------------------
 - name: Create service directories
