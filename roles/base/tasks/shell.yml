@@ -24,6 +24,7 @@
     update: false
   become: true
   become_user: "{{ base_shell_user }}"
+  register: base_omz_clone
 
 # Cloning the repo is not the whole install. Upstream's install.sh has a
 # separate setup_zshrc() step that copies templates/zshrc.zsh-template into
@@ -36,6 +37,13 @@
 #
 # force: false is what keeps this safe on adopted machines - an existing
 # .zshrc is never touched, the file is only created when absent.
+#
+# Skipped when --check has not really cloned oh-my-zsh: the template would not
+# exist yet, and the copy fails with "Source ... not found" - a failure that
+# describes check mode rather than the host. This is the fifth task in this
+# library to need such a guard (docker, cloudflare_dns, storage, nvidia, and
+# now here), so treat it as the default question for any task that consumes
+# something an earlier task creates.
 - name: Install the oh-my-zsh .zshrc (only when the user has none)
   ansible.builtin.copy:
     src: "~{{ base_shell_user }}/.oh-my-zsh/templates/zshrc.zsh-template"
@@ -45,11 +53,17 @@
     mode: "0644"
   become: true
   become_user: "{{ base_shell_user }}"
+  when: not (ansible_check_mode and base_omz_clone is changed)
 
-# No longer gated on a prior stat: the task above guarantees .zshrc exists.
+# The task above guarantees .zshrc exists in a real run, so no stat is needed -
+# but it is skipped under --check on a fresh host, and then this one fails with
+# "Destination /home/za/.zshrc does not exist". Carries the same guard, for the
+# same reason.
 - name: Set custom prompt
   ansible.builtin.lineinfile:
     path: "~{{ base_shell_user }}/.zshrc"
     line: "{{ base_zsh_prompt }}"
     state: present
-  when: base_zsh_prompt | length > 0
+  when:
+    - base_zsh_prompt | length > 0
+    - not (ansible_check_mode and base_omz_clone is changed)

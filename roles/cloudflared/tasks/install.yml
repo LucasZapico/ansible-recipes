@@ -21,15 +21,20 @@
       deb [signed-by=/etc/apt/keyrings/cloudflare-main.gpg]
       https://pkg.cloudflare.com/cloudflared
       {{ cloudflared_apt_suite }} main
+  register: cloudflared_apt_source
 
 - name: Remove legacy key location
   ansible.builtin.file:
     path: /usr/share/keyrings/cloudflare-main.gpg
     state: absent
 
+# Skipped when --check has not really written the apt source: the repo is not
+# in apt's cache and this reports "No package matching 'cloudflared'", which
+# describes check mode rather than the host.
 - name: Install cloudflared
   ansible.builtin.apt:
     name: cloudflared
     state: latest
     update_cache: true
   notify: Restart cloudflared
+  when: not (ansible_check_mode and cloudflared_apt_source is changed)
