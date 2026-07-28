@@ -1,0 +1,138 @@
+---
+- name: Validate role inputs
+  ansible.builtin.assert:
+    that:
+      - jellyfin_api_key | length > 0
+    fail_msg: >-
+      jellyfin_api_key is empty. Create one in Dashboard > API Keys and put it
+      in the vault. This role configures Jellyfin over its own REST API and
+      cannot authenticate without it.
+
+- name: Validate library definitions
+  ansible.builtin.assert:
+    that:
+      - item.name is defined and item.name | length > 0
+      - item.type is defined
+      - item.type in jellyfin_collection_types
+      - item.paths is defined and item.paths | length > 0
+    fail_msg: >-
+      each jellyfin_libraries entry needs name, paths, and a type from
+      {{ jellyfin_collection_types | join(', ') }} - got
+      '{{ item.type | default('none') }}' for
+      '{{ item.name | default('?') }}'
+  loop: "{{ jellyfin_libraries }}"
+  loop_control:
+    label: "{{ item.name | default('?') }}"
+
+# Read-only, and it is the gate for everything below, so it must run in check
+# mode too. A dry run that cannot see current state can only report noise.
+- name: Wait for the Jellyfin API to answer
+  ansible.builtin.uri:
+    url: "{{ jellyfin_url }}/System/Info/Public"
+    timeout: "{{ jellyfin_api_timeout }}"
+  register: jellyfin_public_info
+  retries: "{{ jellyfin_ready_retries }}"
+  delay: "{{ jellyfin_ready_delay }}"
+  until: jellyfin_public_info.status | default(0) == 200
+  check_mode: false
+  changed_when: false
+
+# The startup wizard creates the first admin account, which is a credential
+# decision rather than configuration, so it stays a human step. Everything after
+# it is declarative and lives here.
+- name: Require the startup wizard to have been completed
+  ansible.builtin.assert:
+    that: jellyfin_public_info.json.StartupWizardCompleted | bool
+    fail_msg: >-
+      Jellyfin at {{ jellyfin_url }} has not been through its startup wizard.
+      Complete it in a browser once to create the admin account, then issue an
+      API key and re-run. This role deliberately does not create the first
+      account.
+
+- name: Read the libraries that already exist
+  ansible.builtin.uri:
+    url: "{{ jellyfin_url }}/Library/VirtualFolders"
+    headers: "{{ jellyfin_auth_headers }}"
+    timeout: "{{ jellyfin_api_timeout }}"
+  register: jellyfin_existing_libraries
+  check_mode: false
+  changed_when: false
+
+- name: Work out which libraries are missing
+  ansible.builtin.set_fact:
+    jellyfin_missing_libraries: >-
+      {{ jellyfin_libraries
+         | rejectattr('name', 'in', jellyfin_existing_libraries.json
+                                    | map(attribute='Name') | list)
+         | list }}
+
+# Matched on Name only. Jellyfin has no API to edit an existing library's paths
+# in place, so this creates what is missing and leaves what exists alone rather
+# than pretending to reconcile it. Renaming a library in host_vars therefore
+# creates a second one - remove the old through the dashboard.
+- name: Create missing libraries
+  ansible.builtin.uri:
+    url: "{{ jellyfin_url }}/Library/VirtualFolders?{{ jellyfin_new_library_query }}"
+    method: POST
+    headers: "{{ jellyfin_auth_headers }}"
+    body_format: json
+    body:
+      LibraryOptions: >-
+        {{ jellyfin_library_default_options
+           | combine(item.options | default({}), recursive=true)
+           | combine({'PathInfos': item.paths | map('community.general.dict_kv', 'Path') | list}) }}
+    status_code: [200, 204]
+    timeout: "{{ jellyfin_api_timeout }}"
+  loop: "{{ jellyfin_missing_libraries }}"
+  loop_control:
+    label: "{{ item.name }} ({{ item.type }})"
+  vars:
+    # Jellyfin takes these as query parameters, not in the body. The name is
+    # url-encoded because library names legitimately contain spaces.
+    jellyfin_new_library_query: >-
+      name={{ item.name | urlencode }}&collectionType={{ item.type
+      }}&refreshLibrary={{ jellyfin_refresh_new_libraries | bool | lower }}
+  when: not ansible_check_mode
+  changed_when: true
+
+- name: Read the current encoding configuration
+  ansible.builtin.uri:
+    url: "{{ jellyfin_url }}/System/Configuration/encoding"
+    headers: "{{ jellyfin_auth_headers }}"
+    timeout: "{{ jellyfin_api_timeout }}"
+  register: jellyfin_current_encoding
+  check_mode: false
+  changed_when: false
+  when: jellyfin_encoding | length > 0
+
+# Merged over what the server already has, so keys this role does not name keep
+# their dashboard values instead of being reset to schema defaults.
+- name: Apply encoding configuration
+  ansible.builtin.uri:
+    url: "{{ jellyfin_url }}/System/Configuration/encoding"
+    method: POST
+    headers: "{{ jellyfin_auth_headers }}"
+    body_format: json
+    body: "{{ jellyfin_current_encoding.json | combine(jellyfin_encoding) }}"
+    status_code: [200, 204]
+    timeout: "{{ jellyfin_api_timeout }}"
+  when:
+    - jellyfin_encoding | length > 0
+    - jellyfin_current_encoding.json | combine(jellyfin_encoding) != jellyfin_current_encoding.json
+    - not ansible_check_mode
+  changed_when: true
+
+# Both mutations above are skipped under --check, which would otherwise report
+# nothing at all for a host that needs work. This says what a converge would do,
+# so a dry run is worth reading.
+- name: Report what a converge would change
+  ansible.builtin.debug:
+    msg:
+      libraries_to_create: "{{ jellyfin_missing_libraries | map(attribute='name') | list }}"
+      # `and` short-circuits in Jinja, so .json is only touched when the read
+      # above actually ran.
+      encoding_needs_update: >-
+        {{ jellyfin_encoding | length > 0
+           and (jellyfin_current_encoding.json | combine(jellyfin_encoding))
+               != jellyfin_current_encoding.json }}
+  when: ansible_check_mode

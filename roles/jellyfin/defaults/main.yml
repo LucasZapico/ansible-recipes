@@ -1,0 +1,48 @@
+---
+# Where the API lives. Local by default: this role runs on the host itself, so
+# it never needs the service exposed publicly to configure it.
+jellyfin_url: http://localhost:8096
+
+# API key from Dashboard > API Keys, supplied from the vault. Deliberately empty
+# here so a host that has not been given one fails loudly rather than silently
+# skipping configuration. An API key is used rather than the admin password
+# because it is revocable on its own and never grants a login session.
+jellyfin_api_key: ""
+
+# Media libraries. Each item:
+#   name:    display name, and the identity this role matches on
+#   type:    movies | tvshows | music | musicvideos | homevideos | boxsets |
+#            books | mixed
+#   paths:   list of paths AS SEEN INSIDE THE CONTAINER
+#   options: any LibraryOptions field, e.g. AutomaticallyAddToCollection
+#
+# Paths are container paths, not host paths. Jellyfin resolves them in its own
+# filesystem namespace, so /mnt/merged/... is meaningless to it and the library
+# would come up empty.
+jellyfin_libraries: []
+
+# Default LibraryOptions merged under each library's own `options`.
+#
+# AutomaticallyAddToCollection is Jellyfin's native collection builder: when a
+# movie belongs to a franchise its metadata provider knows about, it is filed
+# into a collection without anyone creating one by hand. This is the automation
+# for collections - Jellyfin builds them from metadata, and this role's job is
+# to make sure the option is on rather than to maintain a list of boxsets.
+jellyfin_library_default_options:
+  EnableRealtimeMonitor: true
+  AutomaticallyAddToCollection: true
+  SaveLocalMetadata: false
+
+# Trigger a scan when a library is created. Only ever fires for newly created
+# libraries, so a converge does not kick off a full rescan every time.
+jellyfin_refresh_new_libraries: true
+
+# EncodingOptions overrides, merged over whatever the server currently has.
+# Only the keys named here are asserted; everything else is left alone, so this
+# does not fight with settings changed in the dashboard.
+jellyfin_encoding: {}
+
+# How long to wait for the API to answer before giving up.
+jellyfin_api_timeout: 30
+jellyfin_ready_retries: 15
+jellyfin_ready_delay: 4
