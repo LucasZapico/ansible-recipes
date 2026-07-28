@@ -1,0 +1,108 @@
+---
+- name: Validate mount definitions
+  ansible.builtin.assert:
+    that:
+      - item.src is defined and item.src | length > 0
+      - item.path is defined and item.path | length > 0
+      - item.fstype is defined and item.fstype | length > 0
+      - not (item.src is match('^/dev/sd[a-z]'))
+    fail_msg: >-
+      storage_mounts entries need src/path/fstype, and src must not be a bare
+      /dev/sdX name - kernel device names reorder between boots and between two
+      disks of the same model. Use UUID=, LABEL=, or /dev/disk/by-id/.
+  loop: "{{ storage_mounts }}"
+  loop_control:
+    label: "{{ item.path | default('?') }}"
+
+- name: Ensure mountpoints exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ storage_mounts }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Mount data disks and record them in fstab
+  ansible.posix.mount:
+    src: "{{ item.src }}"
+    path: "{{ item.path }}"
+    fstype: "{{ item.fstype }}"
+    opts: >-
+      {{ item.opts | default('defaults')
+         ~ ('' if not storage_force_nofail or 'nofail' in (item.opts | default(''))
+            else ',nofail') }}
+    state: mounted
+  loop: "{{ storage_mounts }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+# --- union mount ------------------------------------------------------------
+- name: Install mergerfs
+  ansible.builtin.apt:
+    name: mergerfs
+    state: present
+  when: storage_merged | length > 0
+
+- name: Ensure the union mountpoint exists
+  ansible.builtin.file:
+    path: "{{ storage_merged.path }}"
+    state: directory
+    mode: "0755"
+  when: storage_merged | length > 0
+
+# x-systemd.requires= on each branch is what stops the union mounting before its
+# members. Without it mergerfs can come up over empty directories at boot and
+# present a union that is silently missing whole disks - which looks like data
+# loss and is very confusing to debug.
+- name: Mount the union and record it in fstab
+  ansible.posix.mount:
+    src: "{{ storage_merged.branches | join(':') }}"
+    path: "{{ storage_merged.path }}"
+    fstype: fuse.mergerfs
+    opts: >-
+      {{ storage_merged.opts | default(storage_merged_default_opts) }},nofail{{
+      storage_merged.branches | map('regex_replace', '^', ',x-systemd.requires=') | join('') }}
+    state: mounted
+  when: storage_merged | length > 0
+
+- name: Verify every branch actually shows up in the union
+  ansible.builtin.stat:
+    path: "{{ storage_merged.path }}/{{ item }}"
+  register: storage_union_check
+  loop: "{{ storage_merged.probe_paths | default([]) }}"
+  when: storage_merged | length > 0
+  changed_when: false
+
+- name: Fail if a declared union path is missing
+  ansible.builtin.assert:
+    that: item.stat.exists
+    fail_msg: >-
+      {{ storage_merged.path }}/{{ item.item }} is missing from the union. A
+      branch probably failed to mount, so mergerfs unioned an empty directory.
+  loop: "{{ storage_union_check.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item | default('') }}"
+  when: storage_merged | length > 0
+
+# --- directories and links --------------------------------------------------
+- name: Create service directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(omit) }}"
+    group: "{{ item.group | default(omit) }}"
+    mode: "{{ item.mode | default('0755') }}"
+  loop: "{{ storage_dirs }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Create compatibility symlinks
+  ansible.builtin.file:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    state: link
+    force: false
+  loop: "{{ storage_links }}"
+  loop_control:
+    label: "{{ item.dest }} -> {{ item.src }}"

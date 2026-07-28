@@ -1,0 +1,39 @@
+---
+# Data disks to mount, in order. Each item:
+#   src:    UUID=..., LABEL=..., or a /dev/disk/by-id path
+#   path:   mountpoint
+#   fstype: ext4, xfs, ...
+#   opts:   mount options (nofail is added if you omit it - see below)
+#
+# Prefer a stable identifier over /dev/sdX: kernel names reorder when disks are
+# added, removed, or reseated, and two disks of the same model are told apart
+# only by serial. A /dev/disk/by-id/ata-<model>_<serial> path is as stable as a
+# UUID and names the physical drive, which is useful when the fleet already
+# tracks disks by serial.
+storage_mounts: []
+
+# nofail is forced onto every entry. A data disk that fails to appear must never
+# hold up boot - the alternative is a headless server dropping to an emergency
+# shell over a disk nothing critical depends on.
+storage_force_nofail: true
+
+# Union mount (mergerfs) presenting several disks as one tree. Empty = skip.
+#   path:     where the union appears
+#   branches: list of source mountpoints
+#   opts:     mergerfs options
+storage_merged: {}
+
+# Directories to create after mounting, e.g. service data roots.
+# Each item: {path, owner, group, mode}
+storage_dirs: []
+
+# Symlinks to create, e.g. a legacy path that compose files still reference.
+# Each item: {src, dest}
+storage_links: []
+
+# Default mergerfs options when storage_merged.opts is not given.
+#   category.create=mfs  new files go to the branch with the most free space
+#   minfreespace=50G     stop writing to a branch before it fills completely
+#   allow_other          containers running as other uids can read the union
+storage_merged_default_opts: >-
+  defaults,allow_other,use_ino,cache.files=partial,dropcacheonclose=true,category.create=mfs,minfreespace=50G
