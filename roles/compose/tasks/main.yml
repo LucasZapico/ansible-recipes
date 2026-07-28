@@ -1,0 +1,88 @@
+---
+- name: Validate stack definitions
+  ansible.builtin.assert:
+    that:
+      - item.name is defined and item.name | length > 0
+      - item.src is defined and item.src | length > 0
+    fail_msg: "each compose_stacks entry needs name and src"
+  loop: "{{ compose_stacks }}"
+  loop_control:
+    label: "{{ item.name | default('?') }}"
+
+# Split once rather than repeating filters on every task. `state` is optional,
+# and rejectattr('state', 'eq', 'absent') raises "object of type 'dict' has no
+# attribute 'state'" on any entry that omits it.
+- name: Split stacks by desired state
+  ansible.builtin.set_fact:
+    compose_stacks_present: >-
+      {{ compose_stacks | rejectattr('state', 'defined') | list
+         + compose_stacks | selectattr('state', 'defined')
+                          | selectattr('state', 'equalto', 'present') | list }}
+    compose_stacks_absent: >-
+      {{ compose_stacks | selectattr('state', 'defined')
+                        | selectattr('state', 'equalto', 'absent') | list }}
+
+- name: Ensure stack directories exist
+  ansible.builtin.file:
+    path: "{{ item.dir | default(compose_stack_root ~ '/' ~ item.name) }}"
+    state: directory
+    owner: "{{ item.owner | default(ansible_user) }}"
+    group: "{{ item.owner | default(ansible_user) }}"
+    mode: "0755"
+  loop: "{{ compose_stacks_present }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+# The compose file is copied, not templated, so what runs on the host is exactly
+# what is reviewable in git. Anything host-specific belongs in .env below.
+- name: Deploy compose files
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dir | default(compose_stack_root ~ '/' ~ item.name) }}/docker-compose.yml"
+    owner: "{{ item.owner | default(ansible_user) }}"
+    mode: "0644"
+  loop: "{{ compose_stacks_present }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: compose_stack_files
+
+# 0600: env files carry credentials. Never world-readable, never in the repo in
+# clear - values come from the vault via host_vars.
+- name: Render env files
+  ansible.builtin.copy:
+    content: |
+      {% for k, v in (item.env | default({})).items() %}
+      {{ k }}={{ v }}
+      {% endfor %}
+    dest: "{{ item.dir | default(compose_stack_root ~ '/' ~ item.name) }}/.env"
+    owner: "{{ item.owner | default(ansible_user) }}"
+    mode: "0600"
+  loop: "{{ compose_stacks_present }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+  register: compose_stack_envs
+
+- name: Start stacks
+  community.docker.docker_compose_v2:
+    project_src: "{{ item.dir | default(compose_stack_root ~ '/' ~ item.name) }}"
+    project_name: "{{ item.name }}"
+    state: present
+    pull: "{{ 'always' if item.pull | default(false) else 'missing' }}"
+  loop: "{{ compose_stacks_present }}"
+  loop_control:
+    label: "{{ item.name }}"
+  # On a fresh host in check mode the directory and compose file were never
+  # really written, so there is nothing to bring up - the same guard the rest of
+  # this library uses rather than false-failing a dry run.
+  when: not (ansible_check_mode and (compose_stack_files is changed or compose_stack_envs is changed))
+
+- name: Remove stacks marked absent
+  community.docker.docker_compose_v2:
+    project_src: "{{ item.dir | default(compose_stack_root ~ '/' ~ item.name) }}"
+    project_name: "{{ item.name }}"
+    state: absent
+  loop: "{{ compose_stacks_absent }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: not ansible_check_mode
