@@ -5,16 +5,3 @@
 jellyfin_auth_headers:
   Authorization: 'MediaBrowser Token="{{ jellyfin_api_key }}"'
   Accept: application/json
-
-# CollectionTypeOptions, taken from the server's own /api-docs/openapi.json on
-# 10.11.11. Validated up front because a bad value is accepted by the API and
-# produces a library that never matches anything, which is slow to notice.
-jellyfin_collection_types:
-  - movies
-  - tvshows
-  - music
-  - musicvideos
-  - homevideos
-  - boxsets
-  - books
-  - mixed
