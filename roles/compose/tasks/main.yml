@@ -63,12 +63,23 @@
   no_log: true
   register: compose_stack_envs
 
+# recreate=always when WE changed this stack's inputs. Compose's own change
+# detection does not cover everything in the file - inline `configs.content`
+# in particular - so an edited config shipped to disk but never reached the
+# running container. Observed twice on the litellm stack before this existed.
 - name: Start stacks
   community.docker.docker_compose_v2:
     project_src: "{{ item.dir | default(compose_stack_root ~ '/' ~ item.name) }}"
     project_name: "{{ item.name }}"
     state: present
     pull: "{{ 'always' if item.pull | default(false) else 'missing' }}"
+    recreate: >-
+      {{ 'always'
+         if (compose_stack_files.results | selectattr('item.name', 'equalto', item.name)
+                                         | map(attribute='changed') | first | default(false))
+         or (compose_stack_envs.results | selectattr('item.name', 'equalto', item.name)
+                                        | map(attribute='changed') | first | default(false))
+         else 'auto' }}
   loop: "{{ compose_stacks_present }}"
   loop_control:
     label: "{{ item.name }}"
