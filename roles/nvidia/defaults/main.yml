@@ -1,0 +1,11 @@
+---
+# Driver package. Leave empty to let ubuntu-drivers pick the recommended one,
+# or pin explicitly (e.g. nvidia-driver-580) when you want reproducibility.
+nvidia_driver_package: ""
+
+# Install the container toolkit so docker can hand the GPU to containers.
+nvidia_container_toolkit: true
+
+# Rebooting a server is never done implicitly. When a driver install needs one,
+# the role reports it and fails the verification rather than rebooting for you.
+nvidia_allow_reboot: false

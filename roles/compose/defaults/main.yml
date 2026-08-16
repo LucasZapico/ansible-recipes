@@ -1,0 +1,14 @@
+---
+# Docker compose stacks to deploy. Each item:
+#   name:     stack name, used for the directory and as the compose project
+#   src:      path to the compose file, relative to the playbook's files/ dir
+#   dir:      where the stack lives on the host (default /home/<owner>/services/<name>)
+#   owner:    user owning the directory (default the connecting user)
+#   env:      dict rendered to .env beside the compose file
+#   state:    present (deploy + start) or absent (stop + remove)
+#   pull:     pull newer images on converge (default false, so a converge is
+#             not silently a version upgrade)
+compose_stacks: []
+
+# Directory that holds every stack, unless one overrides `dir`.
+compose_stack_root: "/home/{{ ansible_user | default('root') }}/services"

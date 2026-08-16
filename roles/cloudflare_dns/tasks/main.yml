@@ -22,6 +22,16 @@
   loop_control:
     label: "{{ item }}"
 
+# check_mode: false on both fetches. They are read-only GETs, and `uri` does not
+# run under --check, so without this the role saw an account with ZERO zones in
+# check mode: every skipped result was filtered out by the selectattr below,
+# cloudflare_dns_zones came out empty, and cf_zone_for then matched nothing, so
+# the audit reported every desired hostname as UNROUTABLE and failed the assert.
+# `task check` therefore failed on localhost every single run, for a reason that
+# had nothing to do with DNS - the account was in sync the whole time. A drift
+# audit that always cries wolf is one you learn to ignore, which is worse than
+# not having it. The write paths (converge.yml, prune.yml) deliberately do NOT
+# get this, so --check still refuses to touch a record.
 - name: Fetch zones visible to the token
   ansible.builtin.uri:
     url: "https://api.cloudflare.com/client/v4/zones?per_page=50&page={{ item }}"
@@ -30,6 +40,7 @@
     return_content: true
   register: cloudflare_dns_zone_pages
   no_log: true # the Authorization header would otherwise land in the log
+  check_mode: false
   loop: "{{ range(1, 6) | list }}"
   when: item == 1 or (cloudflare_dns_zone_pages.results[item - 2].json.result_info.total_pages | default(1)) >= item
 
@@ -50,6 +61,7 @@
     return_content: true
   register: cloudflare_dns_record_pages
   no_log: true
+  check_mode: false
   loop: "{{ cloudflare_dns_zones | dict2items }}"
   loop_control:
     label: "{{ item.key }}"

@@ -1,0 +1,23 @@
+---
+# Where the API lives. Local by default: this role runs on the host itself, so
+# it never needs the service exposed publicly to configure it.
+jellyfin_url: http://localhost:8096
+
+# API key from Dashboard > API Keys, supplied from the vault. Deliberately empty
+# here so a host that has not been given one warns rather than silently doing
+# nothing. An API key is used rather than the admin password because it is
+# revocable on its own and never grants a login session.
+jellyfin_api_key: ""
+
+# EncodingOptions overrides, merged over whatever the server currently has.
+# Only the keys named here are asserted; everything else is left alone, so this
+# does not fight with settings changed in the dashboard.
+#
+# This is the whole job of the role. Media libraries are NOT managed here: see
+# the README for why.
+jellyfin_encoding: {}
+
+# How long to wait for the API to answer before giving up.
+jellyfin_api_timeout: 30
+jellyfin_ready_retries: 15
+jellyfin_ready_delay: 4

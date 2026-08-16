@@ -1,0 +1,84 @@
+---
+# A missing API key is a human step (issue one in the dashboard), not something
+# a converge can resolve, so it does not fail the run - the same treatment
+# cloudflare_dns gives orphaned records. It is NOT silent: this warns on every
+# converge and `task verify` asserts on it, because a gate that quietly passes
+# is worse than no gate.
+- name: Warn and skip when no API key is configured
+  when: jellyfin_api_key | length == 0
+  block:
+    - name: Report that Jellyfin configuration is being skipped
+      ansible.builtin.debug:
+        msg: >-
+          SKIPPING Jellyfin configuration on {{ inventory_hostname }}:
+          jellyfin_api_key is empty, so transcoding settings are NOT being
+          applied and Jellyfin will transcode on CPU. Issue a key in
+          Dashboard > API Keys, put it in the vault as vault_jellyfin_api_key,
+          and re-run. `task verify` fails while this is outstanding.
+
+    - name: End the play for this host
+      ansible.builtin.meta: end_host
+
+# Read-only, and it is the gate for everything below, so it must run in check
+# mode too. A dry run that cannot see current state can only report noise.
+- name: Wait for the Jellyfin API to answer
+  ansible.builtin.uri:
+    url: "{{ jellyfin_url }}/System/Info/Public"
+    timeout: "{{ jellyfin_api_timeout }}"
+  register: jellyfin_public_info
+  retries: "{{ jellyfin_ready_retries }}"
+  delay: "{{ jellyfin_ready_delay }}"
+  until: jellyfin_public_info.status | default(0) == 200
+  check_mode: false
+  changed_when: false
+
+# The startup wizard creates the first admin account, which is a credential
+# decision rather than configuration, so it stays a human step. Media libraries
+# are created there too - see the role README for why they are not managed here.
+- name: Require the startup wizard to have been completed
+  ansible.builtin.assert:
+    that: jellyfin_public_info.json.StartupWizardCompleted | bool
+    fail_msg: >-
+      Jellyfin at {{ jellyfin_url }} has not been through its startup wizard.
+      Complete it in a browser once to create the admin account, then issue an
+      API key and re-run. This role deliberately does not create the first
+      account.
+
+- name: Read the current encoding configuration
+  ansible.builtin.uri:
+    url: "{{ jellyfin_url }}/System/Configuration/encoding"
+    headers: "{{ jellyfin_auth_headers }}"
+    timeout: "{{ jellyfin_api_timeout }}"
+  register: jellyfin_current_encoding
+  check_mode: false
+  changed_when: false
+
+# Merged over what the server already has, so keys this role does not name keep
+# their dashboard values instead of being reset to schema defaults. This is a
+# real reconcile: read, compare, write only on drift.
+- name: Apply encoding configuration
+  ansible.builtin.uri:
+    url: "{{ jellyfin_url }}/System/Configuration/encoding"
+    method: POST
+    headers: "{{ jellyfin_auth_headers }}"
+    body_format: json
+    body: "{{ jellyfin_current_encoding.json | combine(jellyfin_encoding) }}"
+    status_code: [200, 204]
+    timeout: "{{ jellyfin_api_timeout }}"
+  when:
+    - jellyfin_encoding | length > 0
+    - jellyfin_current_encoding.json | combine(jellyfin_encoding) != jellyfin_current_encoding.json
+    - not ansible_check_mode
+  changed_when: true
+
+# The write above is skipped under --check, which would otherwise report nothing
+# at all for a host that needs work.
+- name: Report what a converge would change
+  ansible.builtin.debug:
+    msg:
+      encoding_needs_update: >-
+        {{ jellyfin_encoding | length > 0
+           and (jellyfin_current_encoding.json | combine(jellyfin_encoding))
+               != jellyfin_current_encoding.json }}
+      encoding_declared: "{{ jellyfin_encoding }}"
+  when: ansible_check_mode

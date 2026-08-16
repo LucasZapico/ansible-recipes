@@ -24,12 +24,18 @@
       signed-by=/etc/apt/keyrings/docker.asc]
       https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}
       {{ ansible_facts['distribution_release'] }} stable
+  register: docker_apt_source
 
 - name: Remove legacy key location
   ansible.builtin.file:
     path: /usr/share/keyrings/docker.asc
     state: absent
 
+# Skipped when --check has not really written the apt source above: the repo is
+# not in apt's cache, so this reports "No package matching 'docker-ce'" - a
+# failure describing check mode rather than the host. This was the first
+# instance of the pattern in this library and the one that taught us to stop
+# trusting check output on fresh hosts, which is worse than having no check.
 - name: Install Docker engine and compose plugin
   ansible.builtin.apt:
     name:
@@ -39,23 +45,43 @@
       - docker-compose-plugin
     state: present
     update_cache: true
+  when: not (ansible_check_mode and docker_apt_source is changed)
 
-- name: Configure daemon (live-restore)
+# This role owns /etc/docker/daemon.json outright, so whatever another tool
+# writes there is erased on the next converge - silently, with the symptom
+# surfacing somewhere else entirely. `nvidia-ctk runtime configure
+# --runtime=docker` does exactly that: it registers the nvidia runtime in this
+# file, and a later converge would drop it, taking GPU access away from every
+# container with no error to point at. Declare those settings in
+# docker_daemon_options instead, so the file still has exactly one owner.
+- name: Configure the docker daemon
   ansible.builtin.copy:
     dest: /etc/docker/daemon.json
     mode: "0644"
-    content: |
-      {
-        "live-restore": true
-      }
-  when: docker_live_restore
+    content: "{{ docker_daemon_config | to_nice_json }}\n"
+  vars:
+    docker_daemon_config: >-
+      {{ ({'live-restore': true} if docker_live_restore else {})
+         | combine(docker_daemon_options, recursive=true) }}
+  # Second condition: this notifies "Reload docker", and in check mode on a
+  # fresh host the handler would try to reload a service the skipped install
+  # never created.
+  when:
+    - docker_live_restore or docker_daemon_options | length > 0
+    - not (ansible_check_mode and docker_apt_source is changed)
   notify: Reload docker
 
+# Everything below depends on the package actually being installed, so it all
+# carries the same check-mode guard. On a fresh host --check skips the install,
+# and then the service does not exist and the docker group has not been created;
+# without this the drift audit fails three times over for reasons that describe
+# check mode rather than the machine.
 - name: Enable Docker service
   ansible.builtin.systemd:
     name: docker
     enabled: true
     state: started
+  when: not (ansible_check_mode and docker_apt_source is changed)
 
 - name: Add users to docker group
   ansible.builtin.user:
@@ -63,3 +89,4 @@
     groups: docker
     append: true
   loop: "{{ docker_users }}"
+  when: not (ansible_check_mode and docker_apt_source is changed)

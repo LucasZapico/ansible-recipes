@@ -1,14 +1,20 @@
 ---
+# Guarded because it notifies "Restart cloudflared", and the handler cannot
+# restart a service whose binary the skipped install never provided.
 - name: Install systemd unit
   ansible.builtin.template:
     src: cloudflared.service.j2
     dest: /etc/systemd/system/cloudflared.service
     mode: "0644"
   notify: Restart cloudflared
+  when: not (ansible_check_mode and cloudflared_apt_source is changed)
 
+# Same guard as the install: starting a unit whose binary --check never
+# installed fails for a reason that describes check mode, not the host.
 - name: Enable and start cloudflared
   ansible.builtin.systemd:
     name: cloudflared
     daemon_reload: true
     enabled: true
     state: started
+  when: not (ansible_check_mode and cloudflared_apt_source is changed)

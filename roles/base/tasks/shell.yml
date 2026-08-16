@@ -24,12 +24,41 @@
     update: false
   become: true
   become_user: "{{ base_shell_user }}"
+  register: base_omz_clone
 
-- name: Check for .zshrc
-  ansible.builtin.stat:
-    path: "~{{ base_shell_user }}/.zshrc"
-  register: base_zshrc
+# Cloning the repo is not the whole install. Upstream's install.sh has a
+# separate setup_zshrc() step that copies templates/zshrc.zsh-template into
+# place; the clone alone leaves the template unused, so zsh finds no startup
+# files and runs zsh-newuser-install on every login of a freshly built host.
+#
+# A plain copy is faithful to upstream here: setup_zshrc() only transforms the
+# `export ZSH=` line, and at the default clone path that substitution resolves
+# to the value already in the template ($HOME/.oh-my-zsh), making it a no-op.
+#
+# force: false is what keeps this safe on adopted machines - an existing
+# .zshrc is never touched, the file is only created when absent.
+#
+# Skipped when --check has not really cloned oh-my-zsh: the template would not
+# exist yet, and the copy fails with "Source ... not found" - a failure that
+# describes check mode rather than the host. This is the fifth task in this
+# library to need such a guard (docker, cloudflare_dns, storage, nvidia, and
+# now here), so treat it as the default question for any task that consumes
+# something an earlier task creates.
+- name: Install the oh-my-zsh .zshrc (only when the user has none)
+  ansible.builtin.copy:
+    src: "~{{ base_shell_user }}/.oh-my-zsh/templates/zshrc.zsh-template"
+    dest: "~{{ base_shell_user }}/.zshrc"
+    remote_src: true
+    force: false
+    mode: "0644"
+  become: true
+  become_user: "{{ base_shell_user }}"
+  when: not (ansible_check_mode and base_omz_clone is changed)
 
+# The task above guarantees .zshrc exists in a real run, so no stat is needed -
+# but it is skipped under --check on a fresh host, and then this one fails with
+# "Destination /home/za/.zshrc does not exist". Carries the same guard, for the
+# same reason.
 - name: Set custom prompt
   ansible.builtin.lineinfile:
     path: "~{{ base_shell_user }}/.zshrc"
@@ -37,4 +66,4 @@
     state: present
   when:
     - base_zsh_prompt | length > 0
-    - base_zshrc.stat.exists
+    - not (ansible_check_mode and base_omz_clone is changed)

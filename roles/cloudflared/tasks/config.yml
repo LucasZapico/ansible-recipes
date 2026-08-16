@@ -26,3 +26,6 @@
     backup: true
     validate: cloudflared tunnel --config %s ingress validate
   notify: Restart cloudflared
+  # validate: runs the cloudflared binary, which does not exist yet when --check
+  # skipped the install on a fresh host.
+  when: not (ansible_check_mode and cloudflared_apt_source is changed)
