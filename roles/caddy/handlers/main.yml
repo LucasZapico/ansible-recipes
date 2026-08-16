@@ -1,6 +1,13 @@
 ---
+# Restart, not `caddy reload`: the Caddyfile is a single-file bind mount, and
+# ansible's template module replaces the file atomically (write + rename), so
+# the mount keeps pointing at the OLD inode. An exec'd reload then re-reads the
+# stale file and reports "config is unchanged" while the host file has the new
+# routes - observed on gmktron when openweb.lab/jellyfin.lab silently never
+# served. A restart remounts the file and picks up the new inode.
 - name: Reload caddy
-  community.docker.docker_container_exec:
-    container: caddy
-    command: caddy reload --config /etc/caddy/Caddyfile
+  community.docker.docker_container:
+    name: caddy
+    state: started
+    restart: true
   when: not ansible_check_mode
