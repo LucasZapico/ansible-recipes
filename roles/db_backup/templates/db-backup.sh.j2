@@ -34,11 +34,20 @@ declare -a FRESH=()
 # ---- {{ d.name }} ({{ d.engine }}, container {{ d.container }}) ----
 F="$LOCAL_DIR/{{ d.name }}_{{ d.engine }}_${TS}.{{ 'sql.gz' if d.engine == 'postgres' else 'archive.gz' }}"
 log "dumping {{ d.name }} -> $F"
+# Resolve the running container by an anchored name regex, never a fixed name.
+# Coolify ignores a compose `container_name:` and appends a per-deploy suffix
+# (bhreco-postgres-staging-<resourceuuid>-<epoch>), so the exact name changes on
+# every redeploy. The match MUST resolve to exactly one container; zero or many
+# is a hard failure, so a bad pattern can never silently dump the wrong database
+# (the failure mode of the sync job this role replaces).
+CID="$(docker ps -q --filter "name={{ d.container }}")"
+CN="$(printf '%s\n' "$CID" | grep -c .)"
+[ "$CN" -eq 1 ] || fail "{{ d.name }}: expected exactly 1 running container matching /{{ d.container }}/, found $CN"
 {% if d.engine == 'postgres' %}
-docker exec {{ d.container }} pg_dump -U {{ d.user }} {{ d.db }} | gzip > "$F"
+docker exec "$CID" pg_dump -U {{ d.user }} {{ d.db }} | gzip > "$F"
 verify_postgres "$F" || fail "{{ d.name }}: dump failed verification (empty or corrupt)"
 {% elif d.engine == 'mongo' %}
-docker exec {{ d.container }} mongodump --username {{ d.user }} --password '{{ d.password }}' \
+docker exec "$CID" mongodump --username {{ d.user }} --password '{{ d.password }}' \
   --authenticationDatabase admin --db {{ d.db }} --archive | gzip > "$F"
 verify_mongo "$F" || fail "{{ d.name }}: dump failed verification (empty or corrupt)"
 {% endif %}

@@ -14,13 +14,18 @@ db_backup_retention_days: 7
 # Each entry:
 #   name:      short slug used in the filename (e.g. bhreco_prod)
 #   engine:    postgres | mongo
-#   container: the docker container name to exec into
+#   container: an ANCHORED name regex (docker --filter name=) that resolves to
+#              EXACTLY ONE running container. Not a fixed name: Coolify ignores a
+#              compose `container_name:` and appends a per-deploy suffix, so match
+#              the stable part — `^<uuid>$` for a standalone resource, or
+#              `^<service>-<resourceuuid>` for a compose service (epoch omitted).
+#              Zero or multiple matches is a hard failure by design.
 #   db:        database name
 #   user:      db user (postgres: in-container trust, no password needed)
 #   password:  REQUIRED for mongo, from a vaulted var; omit for postgres
 # Example (in host_vars):
 #   db_backup_databases:
-#     - { name: bhreco_prod, engine: postgres, container: bhreco-postgres-prod, db: bhrecoapp, user: bhreco }
+#     - { name: bhreco_prod, engine: postgres, container: '^nkcwgkgkw8k0os8k4cg4s088$', db: bhrecoapp, user: bhreco }
 db_backup_databases: []
 
 # Offsite copy. Disabled by default; a host that should replicate sets these.
