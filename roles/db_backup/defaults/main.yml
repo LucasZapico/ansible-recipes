@@ -1,0 +1,43 @@
+---
+# db_backup — dump the databases running on a host, keep a local copy, and push
+# a verified copy to an offsite host. Runs on the host where the databases live
+# (a Coolify host is fine; the role only `docker exec`s into the DB containers,
+# it does not manage the docker engine).
+#
+# The list of databases is host-specific and set in inventory, never here.
+
+# Where dumps land locally, and how long they are kept.
+db_backup_dir: /home/{{ ansible_user }}/db-backups
+db_backup_retention_days: 7
+
+# The databases to dump. One mapping per database, set per host in inventory.
+# Each entry:
+#   name:      short slug used in the filename (e.g. bhreco_prod)
+#   engine:    postgres | mongo
+#   container: the docker container name to exec into
+#   db:        database name
+#   user:      db user (postgres: in-container trust, no password needed)
+#   password:  REQUIRED for mongo, from a vaulted var; omit for postgres
+# Example (in host_vars):
+#   db_backup_databases:
+#     - { name: bhreco_prod, engine: postgres, container: bhreco-postgres-prod, db: bhrecoapp, user: bhreco }
+db_backup_databases: []
+
+# Offsite copy. Disabled by default; a host that should replicate sets these.
+# The role generates a dedicated ed25519 key ON this host (never committed),
+# and the db_backup_target role authorises it on the offsite host.
+db_backup_offsite_enabled: false
+db_backup_offsite_host: ""          # IP or name reachable from this host
+db_backup_offsite_user: za
+db_backup_offsite_dir: ""           # e.g. /mnt/merged/db-backups/{{ inventory_hostname }}
+db_backup_offsite_retention_days: 30
+# The offsite host's ssh host key, pinned so rsync never trusts on first use or
+# breaks silently. Get it with: ssh-keyscan -t ed25519 <offsite-ip>
+db_backup_offsite_hostkey: ""
+
+# Private key the source host uses for the offsite push. Generated on the host
+# on first run; the path is all that is stored anywhere.
+db_backup_ssh_key: /home/{{ ansible_user }}/.ssh/db_backup_ed25519
+
+# Backup cadence, as a systemd OnCalendar expression. Every two hours by default.
+db_backup_on_calendar: "*-*-* 00/2:00:00"
