@@ -1,0 +1,83 @@
+---
+- name: Require a database list
+  ansible.builtin.assert:
+    that:
+      - db_backup_databases | length > 0
+    fail_msg: >-
+      db_backup_databases is empty. Set it in host_vars for this host — the role
+      does not guess which containers to dump.
+
+- name: Require offsite settings when offsite is enabled
+  ansible.builtin.assert:
+    that:
+      - db_backup_offsite_host | length > 0
+      - db_backup_offsite_dir | length > 0
+      - db_backup_offsite_hostkey | length > 0
+    fail_msg: >-
+      db_backup_offsite_enabled is true but host/dir/hostkey are not all set.
+      Pin the offsite host key with: ssh-keyscan -t ed25519 <offsite-ip>
+  when: db_backup_offsite_enabled | bool
+
+- name: Ensure the local backup directory exists
+  ansible.builtin.file:
+    path: "{{ db_backup_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    mode: "0750"
+
+# ── offsite key + host-key pin (only when replicating) ──────────────────────
+- name: Generate the dedicated offsite ssh key on this host
+  community.crypto.openssh_keypair:
+    path: "{{ db_backup_ssh_key }}"
+    type: ed25519
+    comment: "db-backup {{ inventory_hostname }} -> {{ db_backup_offsite_host }}"
+    owner: "{{ ansible_user }}"
+    mode: "0600"
+  register: db_backup_key
+  when: db_backup_offsite_enabled | bool
+
+- name: Expose this host's offsite public key to the play (for db_backup_target)
+  ansible.builtin.set_fact:
+    db_backup_pubkey: "{{ db_backup_key.public_key }}"
+  when: db_backup_offsite_enabled | bool and db_backup_key is defined
+
+- name: Pin the offsite host key so rsync never trusts on first use
+  ansible.builtin.known_hosts:
+    path: "/home/{{ ansible_user }}/.ssh/known_hosts"
+    name: "{{ db_backup_offsite_host }}"
+    key: "{{ db_backup_offsite_host }} {{ db_backup_offsite_hostkey }}"
+    state: present
+  become: true
+  become_user: "{{ ansible_user }}"
+  when: db_backup_offsite_enabled | bool
+
+# ── the script and its schedule ─────────────────────────────────────────────
+- name: Install the backup script
+  ansible.builtin.template:
+    src: db-backup.sh.j2
+    dest: /usr/local/bin/db-backup.sh
+    owner: root
+    mode: "0755"
+  become: true
+
+- name: Install the systemd service and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    mode: "0644"
+  loop:
+    - db-backup.service
+    - db-backup.timer
+  become: true
+  notify: Reload systemd
+
+- name: Flush handlers so the units are loaded before enabling the timer
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the backup timer
+  ansible.builtin.systemd_service:
+    name: db-backup.timer
+    enabled: true
+    state: started
+  become: true

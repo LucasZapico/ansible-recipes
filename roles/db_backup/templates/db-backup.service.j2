@@ -1,0 +1,11 @@
+[Unit]
+Description=Database backup (managed by ansible role db_backup)
+After=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/db-backup.sh
+User={{ ansible_user }}
+# A failed run stays visible in `systemctl status db-backup` and the timer's
+# last result, rather than being swallowed.

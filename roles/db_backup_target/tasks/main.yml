@@ -1,0 +1,28 @@
+---
+- name: Require at least one source
+  ansible.builtin.assert:
+    that:
+      - db_backup_target_sources | length > 0
+    fail_msg: db_backup_target_sources is empty; nothing would be authorised.
+
+- name: Ensure each source's backup directory exists
+  ansible.builtin.file:
+    path: "{{ item.dir }}"
+    state: directory
+    owner: "{{ db_backup_target_user }}"
+    mode: "0750"
+  loop: "{{ db_backup_target_sources }}"
+  become: true
+
+- name: Authorise each source's backup key, restricted to its backup dir
+  ansible.posix.authorized_key:
+    user: "{{ db_backup_target_user }}"
+    key: "{{ hostvars[item.host].db_backup_pubkey }}"
+    # No shell, no forwarding: the key exists only to rsync into the backup
+    # tree. rrsync (shipped with rsync) confines it to that one directory.
+    key_options: >-
+      restrict,command="rrsync {{ item.dir }}"
+    state: present
+  loop: "{{ db_backup_target_sources }}"
+  become: true
+  when: hostvars[item.host].db_backup_pubkey is defined

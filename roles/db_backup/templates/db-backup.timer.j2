@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the database backup on a schedule (managed by ansible role db_backup)
+
+[Timer]
+OnCalendar={{ db_backup_on_calendar }}
+# Catch up a run missed while the host was down, so a reboot near the top of
+# the schedule does not silently skip a backup.
+Persistent=true
+Unit=db-backup.service
+
+[Install]
+WantedBy=timers.target

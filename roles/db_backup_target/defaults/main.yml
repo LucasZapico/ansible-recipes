@@ -1,0 +1,12 @@
+---
+# db_backup_target — the offsite host that RECEIVES verified dumps. It only has
+# to hold the directory and authorise the source host's dedicated backup key,
+# restricted so that key can do nothing but write into the backup tree.
+
+# Source hosts that push here, and where each writes. One mapping per source:
+#   { host: ritron, dir: /mnt/merged/db-backups/ritron }
+# `host` must be an inventory host that runs the db_backup role with offsite on.
+db_backup_target_sources: []
+
+# The user the sources rsync in as (matches db_backup_offsite_user).
+db_backup_target_user: za
