@@ -26,3 +26,33 @@
   loop: "{{ db_backup_target_sources }}"
   become: true
   when: hostvars[item.host].db_backup_pubkey is defined
+
+- name: Install the offsite prune script
+  ansible.builtin.template:
+    src: db-backup-prune.sh.j2
+    dest: /usr/local/bin/db-backup-prune.sh
+    owner: root
+    mode: "0755"
+  become: true
+
+- name: Install the prune service and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    mode: "0644"
+  loop:
+    - db-backup-prune.service
+    - db-backup-prune.timer
+  become: true
+  notify: Reload systemd (db_backup_target)
+
+- name: Flush handlers so the units are loaded before enabling the timer
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the daily prune timer
+  ansible.builtin.systemd_service:
+    name: db-backup-prune.timer
+    enabled: true
+    state: started
+  become: true

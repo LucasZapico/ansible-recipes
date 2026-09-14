@@ -10,3 +10,8 @@ db_backup_target_sources: []
 
 # The user the sources rsync in as (matches db_backup_offsite_user).
 db_backup_target_user: za
+
+# How long received dumps are kept here before the daily prune deletes them.
+# The offsite host holds the LONGER history (the source keeps only a short local
+# window). A source entry may override with its own `retention_days`.
+db_backup_target_retention_days: 30

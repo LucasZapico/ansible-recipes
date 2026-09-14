@@ -35,6 +35,9 @@ db_backup_offsite_enabled: false
 db_backup_offsite_host: ""          # IP or name reachable from this host
 db_backup_offsite_user: za
 db_backup_offsite_dir: ""           # e.g. /mnt/merged/db-backups/{{ inventory_hostname }}
+# Offsite retention is enforced ON THE TARGET (db_backup_target role), because
+# the rrsync-locked key cannot run find remotely. This value is kept for
+# reference/back-compat; set db_backup_target_retention_days on the target host.
 db_backup_offsite_retention_days: 30
 # The offsite host's ssh host key, pinned so rsync never trusts on first use or
 # breaks silently. Get it with: ssh-keyscan -t ed25519 <offsite-ip>

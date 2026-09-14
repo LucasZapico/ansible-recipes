@@ -1,0 +1,7 @@
+[Unit]
+Description=Prune received offsite DB backups (managed by ansible role db_backup_target)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/db-backup-prune.sh
+User={{ db_backup_target_user }}

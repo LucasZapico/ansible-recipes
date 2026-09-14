@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# MANAGED BY ANSIBLE (roles/db_backup_target) — do not edit on the host.
+# Delete received offsite dumps older than the retention window, per source dir.
+# Runs HERE (the offsite host) because the source's key is rrsync-locked and
+# cannot run find remotely.
+set -euo pipefail
+log() { printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*"; }
+{% for s in db_backup_target_sources %}
+find '{{ s.dir }}' -maxdepth 1 -name '*.gz' -mtime +{{ s.retention_days | default(db_backup_target_retention_days) }} -delete
+log "pruned {{ s.dir }} (>{{ s.retention_days | default(db_backup_target_retention_days) }}d)"
+{% endfor %}
