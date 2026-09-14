@@ -61,19 +61,24 @@ log "local prune done (>${RETENTION_DAYS}d)"
 
 {% if db_backup_offsite_enabled %}
 # ---- offsite copy to {{ db_backup_offsite_host }} ----
+# The offsite key is locked to `rrsync {{ db_backup_offsite_dir }}` on the target
+# (db_backup_target role), so this connection can run ONLY rsync — never mkdir,
+# stat or find over ssh. Paths are relative to that rrsync root, so we send to
+# "$REMOTE:./". The target directory is created, and old copies pruned, on the
+# target host (it owns its own, longer retention).
 SSH="ssh -i {{ db_backup_ssh_key }} -o BatchMode=yes -o ConnectTimeout=15"
 REMOTE="{{ db_backup_offsite_user }}@{{ db_backup_offsite_host }}"
-RDIR="{{ db_backup_offsite_dir }}"
-$SSH "$REMOTE" "mkdir -p '$RDIR'" || fail "offsite: cannot reach $REMOTE"
 for f in "${FRESH[@]}"; do
-  rsync -a -e "$SSH" "$f" "$REMOTE:$RDIR/" || fail "offsite: rsync of $f failed"
-  # Confirm the remote copy is the same size, not just that rsync exited 0.
-  L=$(stat -c %s "$f"); R=$($SSH "$REMOTE" "stat -c %s '$RDIR/$(basename "$f")'" 2>/dev/null || echo 0)
-  [ "$L" = "$R" ] || fail "offsite: size mismatch for $(basename "$f") (local $L, remote $R)"
+  b="$(basename "$f")"
+  rsync -a -e "$SSH" "$f" "$REMOTE:./" || fail "offsite: rsync of $b failed"
+  # Verify by CHECKSUM using rsync itself (the only command the key may run): a
+  # dry-run itemise must report nothing to change, i.e. the remote copy is byte-
+  # identical, not merely that rsync exited 0.
+  if [ -n "$(rsync -ni --checksum -e "$SSH" "$f" "$REMOTE:./")" ]; then
+    fail "offsite: remote copy of $b differs after transfer"
+  fi
 done
-# Prune offsite by its own (longer) retention.
-$SSH "$REMOTE" "find '$RDIR' -maxdepth 1 -name '*.gz' -mtime +{{ db_backup_offsite_retention_days }} -delete" || true
-log "offsite copy verified to $REMOTE:$RDIR"
+log "offsite copy verified to $REMOTE (rrsync root {{ db_backup_offsite_dir }})"
 {% endif %}
 
 log "backup run complete"

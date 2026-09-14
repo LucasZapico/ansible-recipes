@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily prune of received offsite DB backups (managed by ansible role db_backup_target)
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+Unit=db-backup-prune.service
+
+[Install]
+WantedBy=timers.target
