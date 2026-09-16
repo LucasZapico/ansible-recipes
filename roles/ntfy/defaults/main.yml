@@ -23,6 +23,12 @@ ntfy_behind_proxy: true
 # (see README) — provisioning them from here would put credentials in the play.
 ntfy_auth_default_access: deny-all
 
+# Shows the login form in the web UI. Without it the web UI can only act
+# anonymously, which deny-all refuses on every topic: subscribed topics sit on a
+# spinner forever and the server reports subscribers=0. Mobile apps log in from
+# their own settings and do not need this.
+ntfy_enable_login: true
+
 # Optional. Self-hosted ntfy cannot wake an iOS device on its own, because only
 # the official app holds the Apple push certificate. Setting this to
 # https://ntfy.sh forwards a *hash* of the topic (no message content) so the
