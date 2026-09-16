@@ -5,6 +5,7 @@ behind-proxy: {{ ntfy_behind_proxy | bool | lower }}
 
 auth-file: /var/lib/ntfy/user.db
 auth-default-access: "{{ ntfy_auth_default_access }}"
+enable-login: {{ ntfy_enable_login | bool | lower }}
 
 cache-file: /var/cache/ntfy/cache.db
 cache-duration: "{{ ntfy_cache_duration }}"
