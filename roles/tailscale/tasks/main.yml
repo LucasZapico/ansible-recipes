@@ -1,0 +1,6 @@
+---
+- name: Install tailscale
+  ansible.builtin.import_tasks: install.yml
+
+- name: Join the tailnet
+  ansible.builtin.import_tasks: join.yml
