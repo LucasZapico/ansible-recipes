@@ -64,6 +64,23 @@ Installs and manages a Cloudflare Tunnel connector the supported way:
 See `examples/host_vars/server-one.yml` for the ingress rule shape and
 `roles/cloudflared/defaults/main.yml` for all variables.
 
+### tailscale
+
+Joins a host to a [Tailscale](https://tailscale.com) tailnet from the
+official apt repository (per distro codename; updates arrive with
+`apt upgrade`). `tailscale_auth_key` is a reusable pre-auth key from the
+admin console, kept in ansible-vault in the private repo; it is consumed
+only on the converge that joins the node. An empty key installs tailscaled,
+warns, and moves on, so a missing credential does not block unrelated work.
+Put the "is it actually joined" assertion in your verify playbook.
+
+Nodes register as `tailscale_hostname` (default: the inventory name) and the
+role reconciles that with `tailscale set` afterwards. MagicDNS is off by
+default (`tailscale_accept_dns: false`) so a host running its own resolver,
+or whose `resolv.conf` another role owns, is not silently repointed at
+`100.100.100.100`. Extra join flags (exit node, subnet routes) go in
+`tailscale_up_extra_args` and apply at join time only.
+
 ### docker
 
 Docker engine + compose plugin from Docker's official apt repository.

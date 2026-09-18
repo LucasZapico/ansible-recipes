@@ -1,0 +1,31 @@
+---
+# Pre-authentication key used to join the tailnet on the FIRST converge only.
+# Generate one in the admin console (Settings > Keys): reusable, and tagged if
+# the tailnet uses ACL tags. Keep it in ansible-vault in the private inventory
+# repo, never in host_vars. Empty means "install tailscaled but do not join",
+# which the role warns about instead of failing, so an unrelated converge is
+# not blocked by a credential only a human can issue.
+tailscale_auth_key: ""
+
+# Name the node registers under. Defaults to the inventory name so the tailnet
+# and the inventory agree on what a machine is called.
+tailscale_hostname: "{{ inventory_hostname }}"
+
+# Whether tailscaled may rewrite the host's resolvers to MagicDNS
+# (100.100.100.100). Off by default: a host that runs its own DNS, or whose
+# resolv.conf another role manages, must not have it silently replaced.
+tailscale_accept_dns: false
+
+# Tailscale SSH (auth via tailnet identity, on top of the normal sshd).
+tailscale_ssh: false
+
+# Extra flags for `tailscale up`, e.g. ["--advertise-exit-node"] or
+# ["--advertise-routes=192.168.1.0/24"]. Only applied at join time; changing
+# them on an already-joined node needs `tailscale set` or `tailscale up
+# --reset` by hand.
+tailscale_up_extra_args: []
+
+# Apt suite. Tailscale publishes per distro codename and, unlike some vendors,
+# tracks new Ubuntu releases promptly; override only if a codename 404s.
+tailscale_apt_suite: "{{ ansible_facts['distribution_release'] }}"
+tailscale_apt_track: stable

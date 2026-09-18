@@ -1,0 +1,53 @@
+---
+# Read-only, so it runs in check mode too: without it every dry run would
+# report "would join" regardless of whether the node is already in.
+- name: Read node state
+  ansible.builtin.command: tailscale status --json
+  register: tailscale_status_raw
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Parse node state
+  ansible.builtin.set_fact:
+    tailscale_state: >-
+      {{ (tailscale_status_raw.stdout | from_json).BackendState
+         if tailscale_status_raw.rc == 0 else 'NotInstalled' }}
+    tailscale_self_hostname: >-
+      {{ ((tailscale_status_raw.stdout | from_json).Self.HostName | default(''))
+         if tailscale_status_raw.rc == 0 else '' }}
+
+- name: Warn when the node cannot join because no auth key is configured
+  ansible.builtin.debug:
+    msg: >-
+      tailscaled is installed but this node is not on the tailnet and
+      tailscale_auth_key is empty. Generate a reusable pre-auth key in the
+      admin console and set it (vault) to join on the next converge.
+  when:
+    - tailscale_state != 'Running'
+    - tailscale_auth_key | length == 0
+
+- name: Join the tailnet
+  ansible.builtin.command:
+    argv: >-
+      {{ ['tailscale', 'up',
+          '--auth-key=' ~ tailscale_auth_key,
+          '--hostname=' ~ tailscale_hostname,
+          '--accept-dns=' ~ (tailscale_accept_dns | string | lower),
+          '--ssh=' ~ (tailscale_ssh | string | lower)]
+         + tailscale_up_extra_args }}
+  no_log: true
+  changed_when: true
+  when:
+    - tailscale_state != 'Running'
+    - tailscale_auth_key | length > 0
+
+# The name the tailnet knows the node by is the one thing worth reconciling
+# after the join: a rebuilt host that comes back as "<name>-1" while the old
+# node record lingers is confusing in every tool that lists peers.
+- name: Set the node hostname
+  ansible.builtin.command: "tailscale set --hostname={{ tailscale_hostname }}"
+  changed_when: true
+  when:
+    - tailscale_state == 'Running'
+    - tailscale_self_hostname != tailscale_hostname
