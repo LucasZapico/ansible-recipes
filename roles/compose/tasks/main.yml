@@ -48,12 +48,20 @@
 
 # 0600: env files carry credentials. Never world-readable, never in the repo in
 # clear - values come from the vault via host_vars.
+#
+# The comment for an env-less stack is load-bearing: with no `env` this
+# rendered an empty string, which copy treats as no content at all ("src (or
+# content) is required"), and the converge died there, one task short of
+# bringing the stack up (kokoro on milotron, 2026-09-18), with the error
+# hidden by no_log. Conditional, not a header on every file: any change to
+# an existing .env recreates that stack on the next converge.
 - name: Render env files
   ansible.builtin.copy:
     content: |
       {% for k, v in (item.env | default({})).items() %}
       {{ k }}={{ v }}
       {% endfor %}
+      {% if not (item.env | default({})) %}# no env for this stack; managed by ansible{% endif %}
     dest: "{{ item.dir | default(compose_stack_root ~ '/' ~ item.name) }}/.env"
     owner: "{{ item.owner | default(ansible_user) }}"
     mode: "0600"
