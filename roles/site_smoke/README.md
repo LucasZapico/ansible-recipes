@@ -20,6 +20,8 @@ only visible from outside.
   announced once, not four times an hour.
 - Exits non-zero on failure, so `systemctl status site-smoke` and the timer's
   last result carry it even with notifications off.
+- Logs a failed notification loudly instead of swallowing it. Alerting that
+  cannot deliver is worse than none, because silence then reads as health.
 
 It deliberately runs somewhere other than the web host, so it exercises the
 same path a visitor takes: DNS, the edge, the origin, the app, and whatever the
@@ -33,6 +35,7 @@ app calls.
 | `site_smoke_on_calendar` | `*:0/15` | Timer schedule (systemd `OnCalendar`). |
 | `site_smoke_timeout` | `60` | Per-request ceiling, in seconds. Generous on purpose: this catches dead, not slow. |
 | `site_smoke_ntfy_url` | `""` | Topic URL for alerts. Empty means log only, which is the right setting while a new check settles. |
+| `site_smoke_ntfy_token` | `""` | Bearer token for publishing. ntfy runs `deny-all`, so without one the server returns 403 and no alert arrives. Create a write-only user for the topic and `ntfy token add <user>`. |
 | `site_smoke_ntfy_priority` | `high` | ntfy priority header. |
 | `site_smoke_state_dir` | `/var/lib/site-smoke` | Where the last result is remembered. |
 

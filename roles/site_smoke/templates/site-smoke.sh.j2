@@ -15,6 +15,7 @@ set -uo pipefail
 STATE_DIR="{{ site_smoke_state_dir }}"
 TIMEOUT={{ site_smoke_timeout }}
 NTFY_URL="{{ site_smoke_ntfy_url }}"
+NTFY_TOKEN="{{ site_smoke_ntfy_token }}"
 NTFY_PRIORITY="{{ site_smoke_ntfy_priority }}"
 
 mkdir -p "$STATE_DIR"
@@ -82,11 +83,22 @@ state_file="$STATE_DIR/last-result"
 previous="$(cat "$state_file" 2>/dev/null || echo unknown)"
 
 notify() {
-  local title="$1" message="$2" tags="$3"
+  local title="$1" message="$2" tags="$3" code auth=()
   [ -z "$NTFY_URL" ] && return 0
-  curl -sS --max-time 15 \
+  [ -n "$NTFY_TOKEN" ] && auth=(-H "Authorization: Bearer $NTFY_TOKEN")
+
+  code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "${auth[@]}" \
     -H "Title: $title" -H "Priority: $NTFY_PRIORITY" -H "Tags: $tags" \
-    -d "$message" "$NTFY_URL" >/dev/null 2>&1 || true
+    -d "$message" "$NTFY_URL" 2>/dev/null)" || code="000"
+
+  # An alert that cannot be delivered is worse than no alerting, because it
+  # looks like silence means healthy. Say so in the journal. ntfy runs
+  # deny-all, so 403 here means the token is missing, wrong, or lacks write
+  # access to this topic.
+  case "$code" in
+    2*) : ;;
+    *) printf "ntfy publish FAILED (HTTP %s) for: %s\n" "$code" "$title" >&2 ;;
+  esac
 }
 
 if [ "$fail_count" -gt 0 ]; then

@@ -11,6 +11,11 @@ site_smoke_state_dir: /var/lib/site-smoke
 # Where a failure is announced. Empty means log only (systemd keeps the result
 # either way), which is the right setting while a new check settles in.
 site_smoke_ntfy_url: ""
+# ntfy runs deny-all, so publishing needs a token from a user with write access
+# to the topic (`ntfy token add <user>`). Without one the server answers 403 and
+# the alert never arrives, which is why a failed notification is logged loudly
+# rather than swallowed.
+site_smoke_ntfy_token: ""
 site_smoke_ntfy_priority: high
 
 # Each site: name, base_url, and checks. Each check:
