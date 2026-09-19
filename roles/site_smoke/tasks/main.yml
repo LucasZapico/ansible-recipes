@@ -1,0 +1,45 @@
+---
+- name: Require at least one site to check
+  ansible.builtin.assert:
+    that: site_smoke_sites | length > 0
+    fail_msg: >-
+      site_smoke_sites is empty. A timer that checks nothing reports success
+      forever, which is worse than not having it.
+
+- name: Ensure the state directory exists
+  ansible.builtin.file:
+    path: "{{ site_smoke_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the check script
+  ansible.builtin.template:
+    src: site-smoke.sh.j2
+    dest: /usr/local/bin/site-smoke.sh
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the systemd service and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - site-smoke.service
+    - site-smoke.timer
+  notify: Reload systemd
+
+- name: Flush handlers so the units are loaded before enabling the timer
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the check timer
+  ansible.builtin.systemd_service:
+    name: site-smoke.timer
+    enabled: true
+    state: started
+    daemon_reload: true

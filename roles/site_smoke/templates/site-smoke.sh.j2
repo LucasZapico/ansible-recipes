@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Public site checks. Managed by ansible (role site_smoke) - do not edit here.
+#
+# Runs from a host that is not the web server, so it exercises the same path a
+# visitor takes: DNS, Cloudflare, the tunnel or origin, the app, and whatever
+# the app calls. That is the point. A check that runs inside the container
+# cannot see a broken edge, and one that reads a cached response cannot see a
+# broken deploy, so every request is cache-busted.
+#
+# Alerts on the transition, not every run: a site that has been down for an
+# hour has already been announced, and repeating it every 15 minutes trains
+# everyone to ignore the topic. Recovery is announced once too.
+set -uo pipefail
+
+STATE_DIR="{{ site_smoke_state_dir }}"
+TIMEOUT={{ site_smoke_timeout }}
+NTFY_URL="{{ site_smoke_ntfy_url }}"
+NTFY_PRIORITY="{{ site_smoke_ntfy_priority }}"
+
+mkdir -p "$STATE_DIR"
+
+# A plain counter alongside the array. Bash's array-length form opens with a
+# brace followed by a hash, which jinja reads as the start of a comment, and
+# this file is a jinja template. Counting by hand avoids the clash entirely.
+failures=()
+fail_count=0
+checked=0
+
+run_check() {
+  local site="$1" name="$2" url="$3" expect="$4" contains="$5" absent="$6" post="$7"
+  local body_file status curl_args
+  body_file="$(mktemp)"
+  checked=$((checked + 1))
+
+  curl_args=(-sS -o "$body_file" -w '%{http_code}' --max-time "$TIMEOUT" -A "site-smoke (fleet)")
+  if [ -n "$post" ]; then
+    curl_args+=(-X POST -H 'Content-Type: application/json' --data "$post")
+  fi
+
+  status="$(curl "${curl_args[@]}" "$url" 2>/dev/null)" || status="000"
+
+  if [ "$status" != "$expect" ]; then
+    failures+=("$site: $name (expected HTTP $expect, got $status)")
+    fail_count=$((fail_count + 1))
+    rm -f "$body_file"
+    return
+  fi
+  if [ -n "$contains" ] && ! grep -qF -- "$contains" "$body_file"; then
+    failures+=("$site: $name (body missing \"$contains\")")
+    fail_count=$((fail_count + 1))
+    rm -f "$body_file"
+    return
+  fi
+  if [ -n "$absent" ] && grep -qF -- "$absent" "$body_file"; then
+    failures+=("$site: $name (body contains \"$absent\")")
+    fail_count=$((fail_count + 1))
+  fi
+  rm -f "$body_file"
+}
+
+bust() { printf 'cb=%s%s' "$(date +%s)" "$RANDOM"; }
+
+{% for site in site_smoke_sites %}
+{% for c in site.checks %}
+run_check "{{ site.name }}" "{{ c.name }}" \
+  "{{ site.base_url }}{{ c.path }}{% if '?' in c.path %}&{% else %}?{% endif %}$(bust)" \
+  "{{ c.expect | default(200) }}" "{{ c.contains | default('') }}" \
+  "{{ c.absent | default('') }}" '{{ c.post | default("") }}'
+{% endfor %}
+{% endfor %}
+
+state_file="$STATE_DIR/last-result"
+previous="$(cat "$state_file" 2>/dev/null || echo unknown)"
+
+notify() {
+  local title="$1" message="$2" tags="$3"
+  [ -z "$NTFY_URL" ] && return 0
+  curl -sS --max-time 15 \
+    -H "Title: $title" -H "Priority: $NTFY_PRIORITY" -H "Tags: $tags" \
+    -d "$message" "$NTFY_URL" >/dev/null 2>&1 || true
+}
+
+if [ "$fail_count" -gt 0 ]; then
+  printf 'FAIL (%d of %d checks):\n' "$fail_count" "$checked"
+  printf '  %s\n' "${failures[@]}"
+  if [ "$previous" != "fail" ]; then
+    notify "Site check failed" "$(printf '%s\n' "${failures[@]}")" "rotating_light"
+  fi
+  echo fail > "$state_file"
+  exit 1
+fi
+
+printf 'OK (%d checks)\n' "$checked"
+if [ "$previous" = "fail" ]; then
+  notify "Site check recovered" "All $checked checks pass again." "white_check_mark"
+fi
+echo ok > "$state_file"
