@@ -28,9 +28,18 @@ checked=0
 
 run_check() {
   local site="$1" name="$2" url="$3" expect="$4" contains="$5" absent="$6" post="$7"
-  local body_file status curl_args
+  local body_file status curl_args sep
   body_file="$(mktemp)"
   checked=$((checked + 1))
+
+  # Cache-busted here rather than in the template, so no rendered value ever
+  # sits next to shell syntax. Every argument above arrives shell-quoted by
+  # jinja's `quote` filter: a marker like href="/articles/ contains a double
+  # quote, and interpolating it raw truncated the script at that character and
+  # silently skipped every check after it (fixed 2026-09-19).
+  sep="?"
+  case "$url" in *\?*) sep="&" ;; esac
+  url="${url}${sep}$(bust)"
 
   curl_args=(-sS -o "$body_file" -w '%{http_code}' --max-time "$TIMEOUT" -A "site-smoke (fleet)")
   if [ -n "$post" ]; then
@@ -62,10 +71,10 @@ bust() { printf 'cb=%s%s' "$(date +%s)" "$RANDOM"; }
 
 {% for site in site_smoke_sites %}
 {% for c in site.checks %}
-run_check "{{ site.name }}" "{{ c.name }}" \
-  "{{ site.base_url }}{{ c.path }}{% if '?' in c.path %}&{% else %}?{% endif %}$(bust)" \
-  "{{ c.expect | default(200) }}" "{{ c.contains | default('') }}" \
-  "{{ c.absent | default('') }}" '{{ c.post | default("") }}'
+run_check {{ site.name | quote }} {{ c.name | quote }} \
+  {{ (site.base_url ~ c.path) | quote }} \
+  {{ c.expect | default(200) | string | quote }} {{ c.contains | default('') | quote }} \
+  {{ c.absent | default('') | quote }} {{ c.post | default('') | quote }}
 {% endfor %}
 {% endfor %}
 
