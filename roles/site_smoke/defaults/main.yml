@@ -1,0 +1,23 @@
+---
+# Uptime checks for the sites we run, from a host that is not the web server.
+# See README.md for the shape of site_smoke_sites.
+
+site_smoke_on_calendar: "*:0/15"
+# Per-request ceiling. Read-aloud synthesises on a cold cache, so this is
+# generous by design: the check is "is it dead", not "is it quick".
+site_smoke_timeout: 60
+site_smoke_state_dir: /var/lib/site-smoke
+
+# Where a failure is announced. Empty means log only (systemd keeps the result
+# either way), which is the right setting while a new check settles in.
+site_smoke_ntfy_url: ""
+site_smoke_ntfy_priority: high
+
+# Each site: name, base_url, and checks. Each check:
+#   name:     what it proves, in words, since this is what the alert says
+#   path:     appended to base_url
+#   expect:   expected HTTP status (default 200)
+#   contains: substring the body must contain (optional)
+#   absent:   substring the body must NOT contain (optional)
+#   post:     JSON string to POST (optional; makes it a POST)
+site_smoke_sites: []

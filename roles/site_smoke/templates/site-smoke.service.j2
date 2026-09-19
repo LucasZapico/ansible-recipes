@@ -1,0 +1,9 @@
+[Unit]
+Description=Public site checks (managed by ansible role site_smoke)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/site-smoke.sh
+User=root

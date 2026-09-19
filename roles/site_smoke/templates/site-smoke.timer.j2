@@ -1,0 +1,14 @@
+[Unit]
+Description=Check the public sites on a schedule (managed by ansible role site_smoke)
+
+[Timer]
+OnCalendar={{ site_smoke_on_calendar }}
+# A check missed while this host was down is not worth catching up on: the next
+# run reports current reality, and a burst of stale alerts after a reboot is
+# noise. This is the opposite of the backup timer, deliberately.
+Persistent=false
+RandomizedDelaySec=60
+Unit=site-smoke.service
+
+[Install]
+WantedBy=timers.target
