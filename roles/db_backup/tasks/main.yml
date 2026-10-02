@@ -75,9 +75,13 @@
 - name: Flush handlers so the units are loaded before enabling the timer
   ansible.builtin.meta: flush_handlers
 
+# In check mode the unit file above was never written, so systemd cannot find
+# the timer. Without this the dry run aborts here, and for a first rollout that
+# means the offsite target play never gets previewed at all.
 - name: Enable and start the backup timer
   ansible.builtin.systemd_service:
     name: db-backup.timer
     enabled: true
     state: started
   become: true
+  ignore_errors: "{{ ansible_check_mode }}"
