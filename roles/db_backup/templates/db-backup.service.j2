@@ -6,6 +6,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/db-backup.sh
+# Runs after every run, success or failure, as root ("+") so it can read the
+# root-only ntfy token. Announces only state changes (failed / recovered).
+ExecStopPost=+/usr/local/sbin/db-backup-notify
 User={{ ansible_user }}
 # A failed run stays visible in `systemctl status db-backup` and the timer's
 # last result, rather than being swallowed.
