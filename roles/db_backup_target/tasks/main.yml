@@ -26,3 +26,62 @@
   loop: "{{ db_backup_target_sources }}"
   become: true
   when: hostvars[item.host].db_backup_pubkey is defined
+
+# Sources cannot delete here (their keys are rsync-only), so this host enforces
+# each source's offsite retention itself.
+- name: Install the offsite prune script
+  ansible.builtin.copy:
+    dest: /usr/local/sbin/db-backup-prune
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      # Managed by ansible role db_backup_target. Prunes each source's dumps
+      # past that source's offsite retention.
+      set -eu
+      {% for s in db_backup_target_sources %}
+      {% set days = hostvars[s.host].db_backup_offsite_retention_days | default(db_backup_target_retention_days) %}
+      find '{{ s.dir }}' -maxdepth 1 -name '*.gz' -mtime +{{ days }} -print -delete
+      {% endfor %}
+  become: true
+
+- name: Install the offsite prune service and timer
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ item.content }}"
+  loop:
+    - name: db-backup-prune.service
+      content: |
+        [Unit]
+        Description=Prune offsite database dumps (managed by ansible role db_backup_target)
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/sbin/db-backup-prune
+    - name: db-backup-prune.timer
+      content: |
+        [Unit]
+        Description=Prune offsite database dumps
+
+        [Timer]
+        OnCalendar={{ db_backup_target_prune_on_calendar }}
+        Persistent=true
+
+        [Install]
+        WantedBy=timers.target
+  loop_control:
+    label: "{{ item.name }}"
+  become: true
+
+- name: Enable and start the prune timer
+  ansible.builtin.systemd_service:
+    name: db-backup-prune.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+  ignore_errors: "{{ ansible_check_mode }}"
