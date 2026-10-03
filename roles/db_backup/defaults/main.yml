@@ -35,6 +35,9 @@ db_backup_offsite_enabled: false
 db_backup_offsite_host: ""          # IP or name reachable from this host
 db_backup_offsite_user: za
 db_backup_offsite_dir: ""           # e.g. /mnt/merged/db-backups/{{ inventory_hostname }}
+# How long the offsite host keeps this host's dumps. Enforced ON the target by
+# db_backup_target's prune timer (the source's key is rsync-only and cannot
+# delete there).
 db_backup_offsite_retention_days: 30
 # The offsite host's ssh host key, pinned so rsync never trusts on first use or
 # breaks silently. Get it with: ssh-keyscan -t ed25519 <offsite-ip>

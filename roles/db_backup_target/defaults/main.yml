@@ -10,3 +10,10 @@ db_backup_target_sources: []
 
 # The user the sources rsync in as (matches db_backup_offsite_user).
 db_backup_target_user: za
+
+# Offsite retention, used when a source does not set
+# db_backup_offsite_retention_days. Pruning runs here because the sources' keys
+# are rsync-only (rrsync) and cannot delete.
+db_backup_target_retention_days: 30
+# Prune cadence (systemd OnCalendar).
+db_backup_target_prune_on_calendar: daily
