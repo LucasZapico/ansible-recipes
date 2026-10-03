@@ -60,6 +60,38 @@
     mode: "0755"
   become: true
 
+- name: Install the alert notifier
+  ansible.builtin.template:
+    src: db-backup-notify.sh.j2
+    dest: /usr/local/sbin/db-backup-notify
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+# The token lives here, root-only, not in a world-readable script.
+- name: Ensure the alert config directory exists
+  ansible.builtin.file:
+    path: /etc/db-backup
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  become: true
+
+- name: Install the alert settings (root-only, holds the ntfy token)
+  ansible.builtin.copy:
+    dest: /etc/db-backup/ntfy.env
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      NTFY_URL='{{ db_backup_ntfy_url }}'
+      NTFY_TOKEN='{{ db_backup_ntfy_token }}'
+      NTFY_PRIORITY='{{ db_backup_ntfy_priority }}'
+  no_log: true
+  become: true
+
 - name: Install the systemd service and timer
   ansible.builtin.template:
     src: "{{ item }}.j2"

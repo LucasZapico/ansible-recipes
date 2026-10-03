@@ -22,6 +22,26 @@
     group: root
     mode: "0755"
 
+# ntfy runs deny-all, so the token is required for alerts to arrive. It lives
+# root-only here, never in the world-readable script above.
+- name: Ensure the alert config directory exists
+  ansible.builtin.file:
+    path: /etc/site-smoke
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install the ntfy token (root-only)
+  ansible.builtin.copy:
+    dest: /etc/site-smoke/ntfy.env
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      NTFY_TOKEN='{{ site_smoke_ntfy_token }}'
+  no_log: true
+
 - name: Install the systemd service and timer
   ansible.builtin.template:
     src: "{{ item }}.j2"

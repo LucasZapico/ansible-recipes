@@ -1,0 +1,51 @@
+#!/bin/bash
+# Managed by ansible role db_backup. Runs as ExecStopPost of db-backup.service.
+# Announces a failed backup once, and its recovery once, to ntfy. systemd
+# passes SERVICE_RESULT ("success" or a failure reason) and INVOCATION_ID.
+set -u
+STATE_DIR=/var/lib/db-backup
+STATE="$STATE_DIR/last-result"
+ENV=/etc/db-backup/ntfy.env
+mkdir -p "$STATE_DIR"
+
+if [ "${SERVICE_RESULT:-}" = "success" ]; then now=ok; else now=fail; fi
+prev="$(cat "$STATE" 2>/dev/null || echo unknown)"
+echo "$now" > "$STATE"
+
+# Only transitions are news. A first-ever success is not.
+[ "$now" = "$prev" ] && exit 0
+[ "$now" = ok ] && [ "$prev" = unknown ] && exit 0
+
+NTFY_URL="" NTFY_TOKEN="" NTFY_PRIORITY=high
+# shellcheck disable=SC1090
+[ -r "$ENV" ] && . "$ENV"
+if [ -z "$NTFY_URL" ]; then
+  echo "db-backup-notify: $now (was $prev); no ntfy URL configured, log only" >&2
+  exit 0
+fi
+
+host="{{ inventory_hostname }}"
+if [ "$now" = fail ]; then
+  title="Backup FAILED on $host"
+  tags="rotating_light,floppy_disk"
+  body="$(journalctl _SYSTEMD_INVOCATION_ID="${INVOCATION_ID:-none}" -n 8 --no-pager -o cat 2>/dev/null)"
+  [ -n "$body" ] || body="db-backup.service result: ${SERVICE_RESULT:-unknown}. See journalctl -u db-backup.service."
+else
+  title="Backup recovered on $host"
+  tags="white_check_mark,floppy_disk"
+  body="db-backup.service succeeded again."
+fi
+
+auth=()
+[ -n "$NTFY_TOKEN" ] && auth=(-H "Authorization: Bearer $NTFY_TOKEN")
+code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "${auth[@]}" \
+  -H "Title: $title" -H "Priority: $NTFY_PRIORITY" -H "Tags: $tags" \
+  --data-binary "$body" "$NTFY_URL" 2>/dev/null)" || code="000"
+case "$code" in
+  2??) echo "db-backup-notify: announced '$title'" >&2 ;;
+  # Alerting that cannot deliver is worse than none: silence reads as health.
+  # Forget the transition so the next run tries to announce it again.
+  *) echo "db-backup-notify: ntfy publish FAILED (HTTP $code) for '$title'" >&2
+     echo "$prev" > "$STATE" ;;
+esac
+exit 0

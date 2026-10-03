@@ -49,3 +49,12 @@ db_backup_ssh_key: /home/{{ ansible_user }}/.ssh/db_backup_ed25519
 
 # Backup cadence, as a systemd OnCalendar expression. Every two hours by default.
 db_backup_on_calendar: "*-*-* 00/2:00:00"
+
+# Alerts. A failed run is announced once, and its recovery once, to an ntfy
+# topic (not every two hours while it stays broken). Empty URL means log only.
+# ntfy runs deny-all, so a token with write access to the topic is required;
+# set it from the vault, never inline. Added 2026-10-03 after ritron's offsite
+# copies failed silently for three weeks.
+db_backup_ntfy_url: ""
+db_backup_ntfy_token: ""
+db_backup_ntfy_priority: high

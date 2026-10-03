@@ -15,7 +15,9 @@ set -uo pipefail
 STATE_DIR="{{ site_smoke_state_dir }}"
 TIMEOUT={{ site_smoke_timeout }}
 NTFY_URL="{{ site_smoke_ntfy_url }}"
-NTFY_TOKEN="{{ site_smoke_ntfy_token }}"
+# The token is not templated here (this script is world-readable). It comes
+# from the root-only /etc/site-smoke/ntfy.env via the unit's EnvironmentFile.
+NTFY_TOKEN="${NTFY_TOKEN:-}"
 NTFY_PRIORITY="{{ site_smoke_ntfy_priority }}"
 
 mkdir -p "$STATE_DIR"
