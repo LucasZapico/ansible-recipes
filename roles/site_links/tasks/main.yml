@@ -1,0 +1,115 @@
+---
+- name: Require at least one site to check
+  ansible.builtin.assert:
+    that: site_links_sites | length > 0
+    fail_msg: >-
+      site_links_sites is empty. A timer that checks nothing reports success
+      forever, which is worse than not having it.
+
+- name: Require a topic and a token for every site
+  ansible.builtin.assert:
+    that:
+      - item.name | default('') | length > 0
+      - item.base_url is match('^https?://')
+      - item.ntfy_url | default('') | length > 0
+      - item.ntfy_token | default('') | length > 0
+    fail_msg: >-
+      {{ item.name | default('a site') }} needs name, base_url, ntfy_url and
+      ntfy_token. The check reports every week, and ntfy is deny-all: a site
+      with no token would be checked and never heard from.
+  loop: "{{ site_links_sites }}"
+  loop_control:
+    label: "{{ item.name | default('?') }}"
+  no_log: true
+
+# The checker is one dependency-free script on Node's own fetch: the
+# distribution's package is enough, no nvm, no npm install.
+- name: Install Node.js
+  ansible.builtin.apt:
+    name: nodejs
+    state: present
+    update_cache: true
+    cache_valid_time: 86400
+
+- name: Read the Node.js version
+  ansible.builtin.command: node --version
+  register: site_links_node_version
+  changed_when: false
+
+- name: Require Node.js 20 or newer
+  ansible.builtin.assert:
+    that: (site_links_node_version.stdout | regex_replace('^v', '') | split('.') | first | int) >= 20
+    fail_msg: "check-links.mjs needs Node 20+ (fetch, AbortSignal.timeout); found {{ site_links_node_version.stdout }}"
+
+- name: Ensure the script and state directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ site_links_script_dir }}"
+    - "{{ site_links_state_dir }}"
+
+- name: Install the checker
+  ansible.builtin.copy:
+    src: check-links.mjs
+    dest: "{{ site_links_script_dir }}/check-links.mjs"
+    owner: root
+    group: root
+    mode: "0755"
+
+# Tokens live root-only, one file per site, never in the world-readable
+# runner or unit files.
+- name: Ensure the per-site config directory exists
+  ansible.builtin.file:
+    path: /etc/site-links
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install each site's alert config (root-only)
+  ansible.builtin.copy:
+    dest: "/etc/site-links/{{ item.name }}.env"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      NTFY_URL='{{ item.ntfy_url }}'
+      NTFY_TOKEN='{{ item.ntfy_token }}'
+  loop: "{{ site_links_sites }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: Install the runner
+  ansible.builtin.template:
+    src: site-links.sh.j2
+    dest: /usr/local/bin/site-links.sh
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the systemd service and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - site-links.service
+    - site-links.timer
+  notify: Reload systemd
+
+- name: Flush handlers so the units are loaded before enabling the timer
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the weekly timer
+  ansible.builtin.systemd_service:
+    name: site-links.timer
+    enabled: true
+    state: started
+    daemon_reload: true

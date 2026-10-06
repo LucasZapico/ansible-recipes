@@ -1,0 +1,13 @@
+[Unit]
+Description=Weekly broken-link check of the public sites (managed by ansible role site_links)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/site-links.sh
+User=root
+# A full crawl of a 250-page site takes about two minutes; this is the ceiling
+# for every site together, generous so a slow outside host cannot kill a run.
+TimeoutStartSec=45min
+Nice=10

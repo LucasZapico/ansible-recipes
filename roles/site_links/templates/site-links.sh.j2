@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Weekly broken-link check, one site after another (managed by ansible role
+# site_links). Each site reports to its own ntfy topic, every run, found
+# something or not. Exits non-zero if any site had a dead link or could not be
+# checked, so `systemctl status site-links` carries it with or without alerts.
+set -u
+status=0
+{% for site in site_links_sites %}
+(
+  set -a
+  # shellcheck disable=SC1091
+  . /etc/site-links/{{ site.name }}.env
+  set +a
+  exec node {{ site_links_script_dir }}/check-links.mjs \
+    --name='{{ site.name }}' \
+    --base='{{ site.base_url }}' \
+    --sitemap='{{ site.sitemap | default("/sitemap.xml") }}' \
+    --canonical='{{ site.canonical | default([]) | join(",") }}' \
+    --out='{{ site_links_state_dir }}/{{ site.name }}' \
+    --keep='{{ site_links_keep }}' \
+    --notify
+)
+rc=$?
+echo "site-links: {{ site.name }} finished with exit ${rc}"
+[ "$rc" -ne 0 ] && status=1
+{% endfor %}
+exit "$status"
