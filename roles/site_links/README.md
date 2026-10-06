@@ -38,6 +38,25 @@ maps those addresses onto `base_url` and counts links to it as the site's own.
 Cloudflare's email-obfuscation addresses (`/cdn-cgi/...`) are skipped, since a
 browser decodes them and a script only ever sees a 404.
 
+## Is every listed business still open? (optional, per site)
+
+A site that lists businesses (bhreco's Live Bellingham Now guides) can also
+ask Google, each week after the link check, whether each one is still open:
+`files/check-places.mjs`, reporting to the same topic every run.
+
+- `closed` fails the run's report: Google says closed for good, or no longer
+  knows the Place ID.
+- `check` is for a person: closed for now, or Google's name differs from ours
+  (a rename, or the wrong ID).
+- `no id`: no Place ID and no place of exactly that name. Events and regions
+  land here; they are counted and named, never alerted.
+
+A place without an ID is searched by name near `places.near`, and only a
+result with the same words (filler like "Brewing" or "Company" aside) counts,
+so "Coffee" never takes a stranger's status. Built 2026-10-06 (za's list,
+item 9, second half); its first run found Twin Sisters and Artivem Mead closed
+for good and Boundary Bay renamed "Boundary on State".
+
 ## Variables
 
 | Variable | Default | Meaning |
@@ -48,9 +67,9 @@ browser decodes them and a script only ever sees a 404.
 | `site_links_state_dir` | `/var/lib/site-links` | Reports, one directory per site. |
 | `site_links_script_dir` | `/usr/local/lib/site-links` | Where the checker is installed. |
 
-Each site takes `name`, `base_url`, optional `canonical` (list of hosts) and
-`sitemap` (default `/sitemap.xml`), and **required** `ntfy_url` and
-`ntfy_token`. The play fails without a topic and token: ntfy runs `deny-all`,
+Each site takes `name`, `base_url`, optional `canonical` (list of hosts),
+`sitemap` (default `/sitemap.xml`) and `places` (`source`, `near`,
+`google_key`), and **required** `ntfy_url` and `ntfy_token`. The play fails without a topic and token: ntfy runs `deny-all`,
 so a site without a token would be checked every week and never heard from.
 
 ## Running it by hand

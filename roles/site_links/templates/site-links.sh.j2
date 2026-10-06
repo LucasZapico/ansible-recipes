@@ -25,5 +25,23 @@ status=0
 rc=$?
 echo "site-links: {{ site.name }} finished with exit ${rc}"
 [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ] && status=1
+{% if site.places is defined %}
+(
+  set -a
+  # shellcheck disable=SC1091
+  . /etc/site-links/{{ site.name }}.env
+  set +a
+  exec node {{ site_links_script_dir }}/check-places.mjs \
+    --name='{{ site.name }}' \
+    --source='{{ site.places.source }}' \
+    --near='{{ site.places.near | default("") }}' \
+    --out='{{ site_links_state_dir }}/{{ site.name }}' \
+    --keep='{{ site_links_keep }}' \
+    --notify
+)
+rc=$?
+echo "site-links: {{ site.name }} places finished with exit ${rc}"
+[ "$rc" -ne 0 ] && [ "$rc" -ne 1 ] && status=1
+{% endif %}
 {% endfor %}
 exit "$status"

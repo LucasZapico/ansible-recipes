@@ -13,9 +13,10 @@
       - item.base_url is match('^https?://')
       - item.ntfy_url | default('') | length > 0
       - item.ntfy_token | default('') | length > 0
+      - item.places is not defined or (item.places.source | default('') is match('^https?://') and item.places.google_key | default('') | length > 0)
     fail_msg: >-
       {{ item.name | default('a site') }} needs name, base_url, ntfy_url and
-      ntfy_token. The check reports every week, and ntfy is deny-all: a site
+      ntfy_token, and with places, a places.source URL and places.google_key. The check reports every week, and ntfy is deny-all: a site
       with no token would be checked and never heard from.
   loop: "{{ site_links_sites }}"
   loop_control:
@@ -52,13 +53,16 @@
     - "{{ site_links_script_dir }}"
     - "{{ site_links_state_dir }}"
 
-- name: Install the checker
+- name: Install the checkers
   ansible.builtin.copy:
-    src: check-links.mjs
-    dest: "{{ site_links_script_dir }}/check-links.mjs"
+    src: "{{ item }}"
+    dest: "{{ site_links_script_dir }}/{{ item }}"
     owner: root
     group: root
     mode: "0755"
+  loop:
+    - check-links.mjs
+    - check-places.mjs
 
 # Tokens live root-only, one file per site, never in the world-readable
 # runner or unit files.
@@ -79,6 +83,7 @@
     content: |
       NTFY_URL='{{ item.ntfy_url }}'
       NTFY_TOKEN='{{ item.ntfy_token }}'
+      GOOGLE_PLACES_KEY='{{ item.places.google_key | default('') if item.places is defined else '' }}'
   loop: "{{ site_links_sites }}"
   loop_control:
     label: "{{ item.name }}"

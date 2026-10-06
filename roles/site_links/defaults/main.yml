@@ -18,4 +18,12 @@ site_links_script_dir: /usr/local/lib/site-links
 #   ntfy_url:    topic to report to (each site reports to its own topic)
 #   ntfy_token:  write token for that topic; ntfy runs deny-all, so without one
 #                every report is refused with 403 and nothing arrives
+#   places:      optional. Also ask Google whether each business the site lists
+#                is still open (files/check-places.mjs), after the link check.
+#                  source:      URL of a JSON list of places (an array, or
+#                               Directus's {data: [...]}) with name and
+#                               google_place_id
+#                  near:        where to search for a place with no ID
+#                               ("Bellingham, WA")
+#                  google_key:  a Places API (New) key
 site_links_sites: []
