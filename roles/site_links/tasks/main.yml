@@ -84,6 +84,7 @@
       NTFY_URL='{{ item.ntfy_url }}'
       NTFY_TOKEN='{{ item.ntfy_token }}'
       GOOGLE_PLACES_KEY='{{ item.places.google_key | default('') if item.places is defined else '' }}'
+      SLACK_WEBHOOK_URL='{{ item.slack_webhook | default('') }}'
   loop: "{{ site_links_sites }}"
   loop_control:
     label: "{{ item.name }}"

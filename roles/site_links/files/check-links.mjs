@@ -264,6 +264,29 @@ async function notify({ dead, moved, summary }, deadLines, savedTo) {
   console.log(`\nsent: ${title}`);
 }
 
+/**
+ * Slack, for the team: only when there is something to fix. The weekly "all
+ * clear" stays on ntfy, the ops channel, so the team's channel hears from
+ * this only when an editor has work. Optional: SLACK_WEBHOOK_URL unset skips
+ * it. A refused post fails like a refused ntfy alert, because a lost message
+ * would read as "nothing wrong".
+ */
+async function slack(text) {
+  const url = process.env.SLACK_WEBHOOK_URL;
+  if (!url) return;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, unfurl_links: false, unfurl_media: false }),
+    signal: AbortSignal.timeout(20_000),
+  }).catch((e) => ({ ok: false, status: e.message }));
+  if (!res.ok) {
+    console.error(`slack refused the report (${res.status}).`);
+    process.exit(2);
+  }
+  console.log("sent to slack");
+}
+
 /* ─────────────────────────── main ─────────────────────────── */
 
 const startedAt = new Date().toISOString();
@@ -312,5 +335,19 @@ if (savedTo) console.log(`\nreport: ${savedTo}`);
 if (NOTIFY) {
   const deadLines = report.dead.map((r) => `${r.url} (${r.detail}; on ${new URL(r.pages[0]).pathname})`);
   await notify(report, deadLines, savedTo);
+  if (report.dead.length) {
+    const shown = report.dead.slice(0, 15).map((r) => `• <${r.url}|${r.url.length > 80 ? `${r.url.slice(0, 77)}…` : r.url}> on ${new URL(r.pages[0]).pathname} (${r.detail})`);
+    const more = report.dead.length - shown.length;
+    await slack(
+      [
+        `*${NAME}: ${report.dead.length} dead link${report.dead.length === 1 ? "" : "s"}* from the weekly link check.`,
+        ...shown,
+        more > 0 ? `…and ${more} more.` : "",
+        savedTo ? `Full list: \`${savedTo}\` on the checking host.` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
 }
 process.exit(report.dead.length ? 1 : 0);

@@ -57,6 +57,15 @@ so "Coffee" never takes a stranger's status. Built 2026-10-06 (za's list,
 item 9, second half); its first run found Twin Sisters and Artivem Mead closed
 for good and Boundary Bay renamed "Boundary on State".
 
+## Slack (optional, per site)
+
+`slack_webhook` sends the team a message only when a run finds dead links or
+closed places: the first fifteen dead links with the page each sits on, or
+every closed place plus the ones worth a look. The weekly all-clear stays on
+ntfy, so the team's channel hears from this only when an editor has work. A
+refused Slack post fails the run's report (exit 2), like a refused ntfy alert.
+Added 2026-10-06; bhreco posts to its digest channel.
+
 ## Variables
 
 | Variable | Default | Meaning |
@@ -68,8 +77,9 @@ for good and Boundary Bay renamed "Boundary on State".
 | `site_links_script_dir` | `/usr/local/lib/site-links` | Where the checker is installed. |
 
 Each site takes `name`, `base_url`, optional `canonical` (list of hosts),
-`sitemap` (default `/sitemap.xml`) and `places` (`source`, `near`,
-`google_key`), and **required** `ntfy_url` and `ntfy_token`. The play fails without a topic and token: ntfy runs `deny-all`,
+`sitemap` (default `/sitemap.xml`), `places` (`source`, `near`,
+`google_key`) and `slack_webhook`, and **required** `ntfy_url` and
+`ntfy_token`. The play fails without a topic and token: ntfy runs `deny-all`,
 so a site without a token would be checked every week and never heard from.
 
 ## Running it by hand
