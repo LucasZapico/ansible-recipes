@@ -28,8 +28,15 @@
  * GOOGLE_PLACES_KEY (a Places API (New) key). Exit 0 nothing closed, 1 closed
  * places found, 2 could not run or report.
  */
+import { setDefaultResultOrder } from "node:dns";
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
+// IPv4 first. gmktron's DNS answers with IPv6 addresses it cannot route, and
+// when Node's fallback to IPv4 was slow the connection timed out: the run of
+// 2026-10-06 19:14 UTC failed to read the sitemap (ETIMEDOUT) while curl over
+// IPv4 answered in 0.15 s. A host with working IPv6 loses nothing by this.
+setDefaultResultOrder("ipv4first");
 
 const arg = (name, fallback) => {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
