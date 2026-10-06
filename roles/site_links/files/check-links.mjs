@@ -38,8 +38,15 @@
  *
  * Exit: 0 nothing dead, 1 something dead, 2 could not run or could not report.
  */
+import { setDefaultResultOrder } from "node:dns";
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
+// IPv4 first. gmktron's DNS answers with IPv6 addresses it cannot route, and
+// when Node's fallback to IPv4 was slow the connection timed out: the run of
+// 2026-10-06 19:14 UTC failed to read the sitemap (ETIMEDOUT) while curl over
+// IPv4 answered in 0.15 s. A host with working IPv6 loses nothing by this.
+setDefaultResultOrder("ipv4first");
 
 const arg = (name, fallback) => {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -170,7 +177,13 @@ const decode = (s) => s.replace(/&amp;/g, "&").replace(/&#x27;|&#39;/g, "'").rep
 async function pagesFromSitemap(url, seen = new Set()) {
   if (seen.has(url)) return [];
   seen.add(url);
-  const got = await get(url, { body: true });
+  let got = await get(url, { body: true });
+  // One retry after a pause: a single slow connection should not cost the
+  // whole week's check, which is all-or-nothing on this one request.
+  if (got.error || got.status >= 500) {
+    await new Promise((r) => setTimeout(r, 15_000));
+    got = await get(url, { body: true });
+  }
   if (got.error || got.status !== 200 || !got.html) {
     throw new Error(`${url}: ${got.error?.detail ?? `answered ${got.status}`}`);
   }
