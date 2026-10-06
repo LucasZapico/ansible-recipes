@@ -18,6 +18,9 @@ site_links_script_dir: /usr/local/lib/site-links
 #   ntfy_url:    topic to report to (each site reports to its own topic)
 #   ntfy_token:  write token for that topic; ntfy runs deny-all, so without one
 #                every report is refused with 403 and nothing arrives
+#   slack_webhook: optional. A Slack incoming webhook that hears only when a
+#                run finds dead links or closed places; the all-clear stays
+#                on ntfy.
 #   places:      optional. Also ask Google whether each business the site lists
 #                is still open (files/check-places.mjs), after the link check.
 #                  source:      URL of a JSON list of places (an array, or

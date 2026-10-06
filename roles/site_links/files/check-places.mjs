@@ -153,6 +153,29 @@ async function notify(title, body, priority, tags) {
   console.log(`sent: ${title}`);
 }
 
+/**
+ * Slack, for the team: only when there is something to fix. The weekly "all
+ * clear" stays on ntfy, the ops channel, so the team's channel hears from
+ * this only when an editor has work. Optional: SLACK_WEBHOOK_URL unset skips
+ * it. A refused post fails like a refused ntfy alert, because a lost message
+ * would read as "nothing wrong".
+ */
+async function slack(text) {
+  const url = process.env.SLACK_WEBHOOK_URL;
+  if (!url) return;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, unfurl_links: false, unfurl_media: false }),
+    signal: AbortSignal.timeout(20_000),
+  }).catch((e) => ({ ok: false, status: e.message }));
+  if (!res.ok) {
+    console.error(`slack refused the report (${res.status}).`);
+    process.exit(2);
+  }
+  console.log("sent to slack");
+}
+
 const startedAt = new Date().toISOString();
 let places;
 try {
@@ -190,5 +213,18 @@ if (savedTo) console.log(`report: ${savedTo}`);
 if (NOTIFY) {
   const title = closed.length ? `${NAME}: ${closed.length} listed place${closed.length === 1 ? "" : "s"} closed` : `${NAME}: weekly place check, nothing closed`;
   await notify(title, text, closed.length ? "high" : "default", closed.length ? "warning" : "white_check_mark");
+  if (closed.length) {
+    const bullets = (rs) => rs.map((r) => `• ${r.name}: ${r.detail}`);
+    await slack(
+      [
+        `*${NAME}: ${closed.length} listed place${closed.length === 1 ? "" : "s"} closed*, per Google, from the weekly place check.`,
+        ...bullets(closed),
+        check.length ? "\nAlso worth a look:" : "",
+        ...bullets(check),
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
 }
 process.exit(closed.length ? 1 : 0);
