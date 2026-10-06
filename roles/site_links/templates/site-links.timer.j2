@@ -1,0 +1,14 @@
+[Unit]
+Description=Weekly broken-link check (managed by ansible role site_links)
+
+[Timer]
+OnCalendar={{ site_links_on_calendar }}
+# Weekly, so a run missed while this host was down is worth catching up on:
+# otherwise a week of downtime silently becomes two weeks unchecked. The
+# opposite choice from site_smoke's every-15-minutes timer, deliberately.
+Persistent=true
+RandomizedDelaySec=10min
+Unit=site-links.service
+
+[Install]
+WantedBy=timers.target
