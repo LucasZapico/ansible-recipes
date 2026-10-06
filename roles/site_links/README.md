@@ -25,8 +25,10 @@ about. A link to a business that closed is invisible from inside the repo.
   that stopped running.
 - Keeps each run's full report as JSON in the state directory, the last twelve
   per site, with `latest.json` beside them.
-- Exits non-zero when a site has a dead link or could not be checked, so
-  `systemctl status site-links` carries it with or without alerts.
+- The job fails only when a site could not be checked or its report could
+  not be sent. Dead links are what the report is for, so a run that found
+  some and reported them succeeds; the first run on gmktron (2026-10-06)
+  showed a working check as a failed unit until this was changed.
 
 It changes nothing. Fixing a link is an editor's job, in the CMS or the code.
 

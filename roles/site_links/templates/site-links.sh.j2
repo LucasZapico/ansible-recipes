@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Weekly broken-link check, one site after another (managed by ansible role
 # site_links). Each site reports to its own ntfy topic, every run, found
-# something or not. Exits non-zero if any site had a dead link or could not be
-# checked, so `systemctl status site-links` carries it with or without alerts.
+# something or not. Dead links are the report's news, not the job's failure:
+# the checker exits 1 for them and the job still succeeds. The job fails only
+# when a site could not be checked or its report could not be sent (exit 2),
+# which is what `systemctl --failed` should show.
 set -u
 status=0
 {% for site in site_links_sites %}
@@ -22,6 +24,6 @@ status=0
 )
 rc=$?
 echo "site-links: {{ site.name }} finished with exit ${rc}"
-[ "$rc" -ne 0 ] && status=1
+[ "$rc" -ne 0 ] && [ "$rc" -ne 1 ] && status=1
 {% endfor %}
 exit "$status"
