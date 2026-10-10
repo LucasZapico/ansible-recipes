@@ -57,6 +57,16 @@ so "Coffee" never takes a stranger's status. Built 2026-10-06 (za's list,
 item 9, second half); its first run found Twin Sisters and Artivem Mead closed
 for good and Boundary Bay renamed "Boundary on State".
 
+## Email (optional, per site)
+
+`email` sends the people who fix the content a readable report when a run
+finds dead links: each broken link listed under the page it sits on, with the
+page's title, a link to it and, given `edit_url` and `edit_lookup`, a link to
+edit it in the CMS. Added 2026-10-10 because the report's "full list" was a
+file on the checking host that a content owner cannot open. Sent through
+Resend; the sender must be on a domain the key may send from (for bhreco,
+bhreco.app; bhamre.co is refused). A refused send exits 2.
+
 ## Slack (optional, per site)
 
 `slack_webhook` sends the team a message only when a run finds dead links or

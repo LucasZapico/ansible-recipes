@@ -284,6 +284,89 @@ async function notify({ dead, moved, summary }, deadLines, savedTo) {
  * it. A refused post fails like a refused ntfy alert, because a lost message
  * would read as "nothing wrong".
  */
+/**
+ * Email, for the people who fix the content (za, 2026-10-10: the report's
+ * "full list" was a file on the checking host that the content owner cannot
+ * open). Sent only when there is something to fix, through Resend, to
+ * EMAIL_TO (comma-separated) from EMAIL_FROM. Optional: RESEND_API_KEY unset
+ * skips it. Each broken link is listed under the page it sits on, with that
+ * page's title, its address and a link to edit it: EDIT_URL with {id}, the
+ * id found by fetching EDIT_LOOKUP with {slug} (the page address's last
+ * part), which answers Directus-style {data: [{id}]}. A refused send exits 2.
+ */
+const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+function plainReason(detail) {
+  if (/does not exist/.test(detail)) return "the website no longer exists";
+  if (/answers 40[4]|answers 410/.test(detail) && /our page/.test(detail)) return "our own page is missing";
+  if (/answers 40[4]|answers 410/.test(detail)) return "the page no longer exists";
+  if (/certificate/.test(detail)) return "the website's security certificate has expired";
+  if (/our page/.test(detail)) return "our own page is not working";
+  return detail;
+}
+async function email(dead) {
+  const key = process.env.RESEND_API_KEY;
+  const to = (process.env.EMAIL_TO ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+  const from = process.env.EMAIL_FROM;
+  if (!key) return;
+  if (!to.length || !from) {
+    console.error("check-links: RESEND_API_KEY is set but EMAIL_TO or EMAIL_FROM is not, so the email cannot go.");
+    process.exit(2);
+  }
+  const editUrl = process.env.EDIT_URL;
+  const lookup = process.env.EDIT_LOOKUP;
+  const idFor = async (slug) => {
+    if (!editUrl || !lookup || !slug) return null;
+    try {
+      const r = await fetch(lookup.replace("{slug}", encodeURIComponent(slug)), { signal: AbortSignal.timeout(10_000) });
+      return r.ok ? ((await r.json()).data?.[0]?.id ?? null) : null;
+    } catch {
+      return null;
+    }
+  };
+  // Each broken link under every page it sits on, pages in order of how many.
+  const byPage = new Map();
+  for (const d of dead) for (const page of d.pages) {
+    if (!byPage.has(page)) byPage.set(page, []);
+    byPage.get(page).push(d);
+  }
+  const groups = [...byPage.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+  const count = `${dead.length} broken link${dead.length === 1 ? "" : "s"}`;
+  const intro = `The weekly link check found ${count} on the website. Most are in older articles, linking to businesses that have closed or pages that were taken down.`;
+  const howTo = "For each one, open the page in the CMS and do one of three things: remove the link, point it to a current page, or keep the words without a link.";
+  const pageBlock = async (page, items) => {
+    const path = new URL(page).pathname;
+    const title = pageTitles.get(page) ?? path;
+    const id = await idFor(path.split("/").filter(Boolean).pop() ?? "");
+    const edit = id !== null ? editUrl.replace("{id}", encodeURIComponent(id)) : null;
+    const live = `${BASE}${path}`;
+    return {
+      html: `<h3 style="margin:24px 0 4px;font-size:16px">${esc(title)}</h3>
+<p style="margin:0 0 8px;font-size:13px"><a href="${esc(live)}">View the page</a>${edit ? ` &middot; <a href="${esc(edit)}">Edit in the CMS</a>` : ""}</p>
+<ul style="margin:0;padding-left:20px;font-size:14px">${items.map((d) => `<li style="margin:0 0 6px"><span style="word-break:break-all">${esc(d.url)}</span><br><span style="color:#555">${esc(plainReason(d.detail))}</span></li>`).join("")}</ul>`,
+      text: `${title}\nView: ${live}${edit ? `\nEdit: ${edit}` : ""}\n${items.map((d) => `  - ${d.url}\n    ${plainReason(d.detail)}`).join("\n")}`,
+    };
+  };
+  const blocks = [];
+  for (const [page, items] of groups) blocks.push(await pageBlock(page, items));
+  const footer = `This email comes from the weekly link check of ${BASE.replace(/^https?:\/\//, "")}. It arrives each Monday while broken links remain.`;
+  const html = `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#111;max-width:640px">
+<p style="font-size:15px">${esc(intro)}</p><p style="font-size:15px">${esc(howTo)}</p>
+${blocks.map((b) => b.html).join("\n")}
+<p style="margin-top:32px;font-size:12px;color:#666">${esc(footer)}</p></div>`;
+  const text = [intro, howTo, ...blocks.map((b) => b.text), footer].join("\n\n");
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from, to, subject: `${NAME}: ${count} to fix on the website`, html, text }),
+    signal: AbortSignal.timeout(20_000),
+  }).catch((e) => ({ ok: false, status: e.message, text: async () => "" }));
+  if (!res.ok) {
+    console.error(`check-links: the email was refused (${res.status}): ${(await res.text()).slice(0, 200)}`);
+    process.exit(2);
+  }
+  console.log(`sent email to ${to.join(", ")}`);
+}
+
 async function slack(text) {
   const url = process.env.SLACK_WEBHOOK_URL;
   if (!url) return;
@@ -322,8 +405,12 @@ console.log(`check-links: ${pages.length} pages from ${BASE}${SITEMAP}`);
 
 // Every page is fetched, and a page that will not load is itself a dead link.
 const linkPages = new Map();
+/** Each page's own title, for the email, without the site name after it. */
+const pageTitles = new Map();
 const pageResults = await pool(pages, () => baseHost, async (page) => ({ page, got: await get(page, { body: true }) }));
 for (const { page, got } of pageResults) {
+  const title = got.html?.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1];
+  if (title) pageTitles.set(page, decode(title).split(/\s+[|\u2013\u2014-]\s+/)[0].trim()); // content-style-ignore: matching title separators, not prose
   for (const link of got.html ? linksOn(got.html, got.finalUrl || page) : []) {
     if (!linkPages.has(link)) linkPages.set(link, []);
     linkPages.get(link).push(page);
@@ -348,6 +435,7 @@ if (savedTo) console.log(`\nreport: ${savedTo}`);
 if (NOTIFY) {
   const deadLines = report.dead.map((r) => `${r.url} (${r.detail}; on ${new URL(r.pages[0]).pathname})`);
   await notify(report, deadLines, savedTo);
+  if (report.dead.length) await email(report.dead);
   if (report.dead.length) {
     const shown = report.dead.slice(0, 15).map((r) => `• <${r.url}|${r.url.length > 80 ? `${r.url.slice(0, 77)}…` : r.url}> on ${new URL(r.pages[0]).pathname} (${r.detail})`);
     const more = report.dead.length - shown.length;
