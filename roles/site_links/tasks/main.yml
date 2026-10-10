@@ -85,6 +85,11 @@
       NTFY_TOKEN='{{ item.ntfy_token }}'
       GOOGLE_PLACES_KEY='{{ item.places.google_key | default('') if item.places is defined else '' }}'
       SLACK_WEBHOOK_URL='{{ item.slack_webhook | default('') }}'
+      RESEND_API_KEY='{{ item.email.resend_key | default('') if item.email is defined else '' }}'
+      EMAIL_TO='{{ item.email.to | default([]) | join(',') if item.email is defined else '' }}'
+      EMAIL_FROM='{{ item.email.from | default('') if item.email is defined else '' }}'
+      EDIT_URL='{{ item.email.edit_url | default('') if item.email is defined else '' }}'
+      EDIT_LOOKUP='{{ item.email.edit_lookup | default('') if item.email is defined else '' }}'
   loop: "{{ site_links_sites }}"
   loop_control:
     label: "{{ item.name }}"
